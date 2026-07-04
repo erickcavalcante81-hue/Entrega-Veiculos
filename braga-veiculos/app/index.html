@@ -997,15 +997,17 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
 <div class="toast" id="toast"></div>
 
 <script>
-// ===== CANONICALIZA A URL =====
-// Se o app for aberto por engano numa URL de Deploy Preview / branch do Netlify
-// (algo como "…--entrega-braga.netlify.app"), manda para a PRODUÇÃO. Isso evita
-// o widget "Netlify Drawer" (que só aparece em previews) e mantém todo mundo no
-// mesmo endereço/dados. Produção ("entrega-braga.netlify.app", sem "--") e
-// domínios próprios não são afetados.
+// ===== CANONICALIZA A URL (só no app instalado) =====
+// Se o app INSTALADO (PWA em tela cheia) for aberto numa URL de Deploy Preview
+// /branch do Netlify ("…--entrega-braga.netlify.app"), manda para a PRODUÇÃO —
+// evita ficar preso num preview e o widget "Netlify Drawer". No NAVEGADOR
+// (revisão de PR) NÃO redireciona, para os previews continuarem testáveis.
+// Produção (sem "--") e domínios próprios não são afetados.
 try {
   if (typeof location !== 'undefined' && /--entrega-braga\.netlify\.app$/.test(location.hostname || '')) {
-    location.replace('https://entrega-braga.netlify.app' + location.pathname + location.search + location.hash);
+    var _standalone = (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)
+                      || (typeof navigator !== 'undefined' && navigator.standalone === true);
+    if (_standalone) location.replace('https://entrega-braga.netlify.app' + location.pathname + location.search + location.hash);
   }
 } catch (e) {}
 
