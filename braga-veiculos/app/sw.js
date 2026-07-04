@@ -4,13 +4,14 @@
    no cache para continuar funcionando offline.
    Requisições de outras origens (Firebase/Firestore, gstatic, CDN do PDF.js)
    passam direto pela rede. */
-const CACHE = 'braga-v56';
+const CACHE = 'braga-v57';
 const CORE = [
   './',
   './index.html',
   './manifest.webmanifest',
   './firebase-config.js',
   './cloud-sync.js',
+  './gae-logo.png',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/apple-touch-icon.png'
