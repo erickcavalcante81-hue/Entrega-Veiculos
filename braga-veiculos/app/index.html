@@ -5,11 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Braga Entregas">
+<meta name="apple-mobile-web-app-title" content="GAE Entregas">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="theme-color" content="#0d0d1a">
-<title>Braga Veículos — Gestão de Entregas</title>
+<meta name="theme-color" content="#16171b">
+<title>GAE — Gestão de Entregas</title>
 <link rel="manifest" href="manifest.webmanifest">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Archivo+Narrow:ital,wght@0,600;0,700;1,600;1,700&family=Overpass:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="icon" type="image/png" href="icons/icon-192.png">
 <!-- Sincronização em nuvem (no-op enquanto firebase-config.js não tiver chaves) -->
@@ -17,28 +18,28 @@
 <script src="cloud-sync.js"></script>
 <style>
 :root {
-  --primary: #e8394f;
-  --primary-dark: #c41e3a;
-  --secondary: #0d0d1a;
-  --bg: #0f1117;
-  --card: #1a1d2e;
-  --border: #2a2d3e;
-  --text: #e8eaf0;
-  --text-light: #8b90a8;
-  --green: #22c55e;
-  --yellow: #eab308;
-  --red: #ef4444;
-  --green-bg: #052e16;
-  --yellow-bg: #1c1a00;
-  --red-bg: #1f0707;
-  --blue: #60a5fa;
-  --blue-bg: #0c1a3a;
-  --shadow: 0 2px 12px rgba(0,0,0,0.5);
-  --radius: 10px;
+  --primary: #9FD84F;
+  --primary-dark: #35D399;
+  --secondary: #1c1e23;
+  --bg: #16171b;
+  --card: #22242a;
+  --border: #31343d;
+  --text: #edeff3;
+  --text-light: #9aa0ab;
+  --green: #35D399;
+  --yellow: #E9D24B;
+  --red: #F0635E;
+  --green-bg: rgba(53,211,153,0.14);
+  --yellow-bg: rgba(233,210,75,0.14);
+  --red-bg: rgba(240,99,94,0.14);
+  --blue: #4AA3FF;
+  --blue-bg: rgba(74,163,255,0.14);
+  --shadow: 0 10px 26px -12px rgba(0,0,0,0.6);
+  --radius: 14px;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: 'Overpass', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   background: var(--bg); color: var(--text);
   font-size: 16px; line-height: 1.55;
   -webkit-font-smoothing: antialiased;
@@ -61,7 +62,7 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
 .header-logo { display: flex; align-items: center; gap: 10px; }
 .header-logo img { height: 34px; }
 .header-title { font-size: 18px; font-weight: 800; letter-spacing: 0.2px; }
-.header-subtitle { font-size: 12px; color: #9ca3af; margin-top: 1px; }
+.header-subtitle { font-size: 12px; color: #9aa0ab; margin-top: 1px; }
 .profile-badge {
   background: var(--primary);
   padding: 7px 14px;
@@ -74,7 +75,7 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
 /* ===== BOTTOM NAV ===== */
 .bottom-nav {
   position: fixed; bottom: 0; left: 0; right: 0;
-  background: #13162a;
+  background: #1c1e23;
   border-top: 1px solid var(--border);
   display: flex;
   z-index: 100;
@@ -117,7 +118,7 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
 .badge-yellow { background: var(--yellow-bg); color: var(--yellow); }
 .badge-red { background: var(--red-bg); color: var(--red); }
 .badge-blue { background: var(--blue-bg); color: var(--blue); }
-.badge-gray { background: #f3f4f6; color: #6b7280; }
+.badge-gray { background: #2b2e35; color: #9aa0ab; }
 
 /* ===== STATUS BAR ===== */
 .status-bar {
@@ -129,10 +130,10 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
 .status-chip {
   flex-shrink: 0; padding: 9px 16px;
   border-radius: 22px; font-size: 13px; font-weight: 600;
-  background: #1a1d2e; border: 2px solid var(--border); color: var(--text-light);
+  background: #22242a; border: 2px solid var(--border); color: var(--text-light);
   cursor: pointer; transition: all 0.2s;
 }
-.status-chip.active { border-color: var(--primary); color: var(--primary); background: #fff0f2; }
+.status-chip.active { border-color: var(--primary); color: var(--primary); background: rgba(159,216,79,0.10); }
 
 /* ===== VEHICLE CARD ===== */
 .vehicle-card {
@@ -152,7 +153,7 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
 .vehicle-model { font-weight: 800; font-size: 17px; letter-spacing: 0.2px; }
 .vehicle-meta { font-size: 14px; color: var(--text-light); margin-top: 4px; }
 .vehicle-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
-.progress-bar { height: 7px; background: #252840; border-radius: 4px; margin: 10px 0; overflow: hidden; }
+.progress-bar { height: 7px; background: #2b2e35; border-radius: 4px; margin: 10px 0; overflow: hidden; }
 .progress-fill { height: 100%; border-radius: 4px; background: var(--primary); transition: width 0.3s; }
 .stage-label { font-size: 13px; font-weight: 600; color: var(--text-light); }
 
@@ -165,7 +166,7 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
 }
 .btn-primary { background: var(--primary); color: white; }
 .btn-primary:hover { background: var(--primary-dark); }
-.btn-secondary { background: #252840; color: var(--text); border: 1.5px solid var(--border); }
+.btn-secondary { background: #2b2e35; color: var(--text); border: 1.5px solid var(--border); }
 .btn-success { background: var(--green); color: white; }
 .btn-danger { background: var(--red); color: white; }
 .btn-sm { padding: 9px 16px; font-size: 13px; min-height: 40px; }
@@ -178,7 +179,7 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
   width: 58px; height: 58px;
   background: var(--primary); color: white;
   border-radius: 50%; font-size: 28px; font-weight: 300;
-  box-shadow: 0 4px 20px rgba(232,57,79,0.5);
+  box-shadow: 0 4px 20px rgba(159,216,79,0.5);
   display: flex; align-items: center; justify-content: center;
   z-index: 90;
   transition: transform 0.2s;
@@ -192,17 +193,17 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
 }
 .modal-overlay.open { display: flex; }
 .modal {
-  background: #13162a; border-radius: 18px 18px 0 0;
+  background: #1c1e23; border-radius: 18px 18px 0 0;
   width: 100%; max-height: 92vh; overflow-y: auto;
   padding: 16px; animation: slideUp 0.3s ease;
 }
 @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
-.modal-handle { width: 40px; height: 4px; background: #d1d5db; border-radius: 2px; margin: 0 auto 16px; }
+.modal-handle { width: 40px; height: 4px; background: #3c404a; border-radius: 2px; margin: 0 auto 16px; }
 .modal-title { font-size: 18px; font-weight: 700; margin-bottom: 16px; }
 
 /* ===== DETAIL MODAL (full screen) ===== */
 .detail-modal {
-  position: fixed; inset: 0; background: #0f1117;
+  position: fixed; inset: 0; background: #16171b;
   z-index: 300; display: none; flex-direction: column;
   overflow: hidden;
 }
@@ -214,7 +215,7 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
 }
 .detail-header h2 { font-size: 18px; flex: 1; font-weight: 800; }
 .detail-body { flex: 1; overflow-y: auto; padding: 12px; }
-.detail-tabs { display: flex; border-bottom: 2px solid var(--border); margin-bottom: 12px; background: #13162a; }
+.detail-tabs { display: flex; border-bottom: 2px solid var(--border); margin-bottom: 12px; background: #1c1e23; }
 .detail-tab {
   flex: 1; padding: 13px 4px; text-align: center;
   font-size: 13px; font-weight: 700; color: var(--text-light);
@@ -230,7 +231,7 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
   width: 100%; padding: 13px 14px;
   border: 1.5px solid var(--border); border-radius: 10px;
   font-size: 16px; transition: border-color 0.2s;
-  background: #0f1117; color: var(--text);
+  background: #16171b; color: var(--text);
   min-height: 48px;
 }
 .form-control:focus { outline: none; border-color: var(--primary); }
@@ -250,7 +251,7 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
 .checklist-stage-title { font-weight: 700; font-size: 14px; }
 .checklist-item {
   display: flex; align-items: flex-start; gap: 14px;
-  padding: 14px 16px; border-bottom: 1px solid #22253a;
+  padding: 14px 16px; border-bottom: 1px solid #2b2e35;
   cursor: pointer;
 }
 .checklist-item:last-child { border-bottom: none; }
@@ -299,7 +300,7 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
 /* ===== ACESSORIOS ===== */
 .acc-item {
   display: flex; align-items: center; gap: 10px;
-  padding: 10px 0; border-bottom: 1px solid #f3f4f6;
+  padding: 10px 0; border-bottom: 1px solid #2b2e35;
 }
 .acc-item:last-child { border-bottom: none; }
 .acc-check { width: 28px; height: 28px; border-radius: 6px; border: 2px solid var(--border); flex-shrink: 0; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
@@ -326,7 +327,7 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
 }
 .login-logo { margin-bottom: 32px; text-align: center; }
 .login-logo h1 { color: white; font-size: 28px; font-weight: 900; }
-.login-logo p { color: #9ca3af; font-size: 15px; margin-top: 6px; }
+.login-logo p { color: #9aa0ab; font-size: 15px; margin-top: 6px; }
 .login-chevron { color: var(--primary); font-size: 46px; font-weight: 900; margin-bottom: 10px; }
 .profile-option {
   width: 100%; padding: 16px; margin-bottom: 12px;
@@ -335,15 +336,15 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
   display: flex; align-items: center; gap: 14px; cursor: pointer;
   transition: all 0.2s;
 }
-.profile-option:hover { background: rgba(196,30,58,0.3); border-color: var(--primary); }
+.profile-option:hover { background: rgba(159,216,79,0.18); border-color: var(--primary); }
 .profile-icon { width: 52px; height: 52px; border-radius: 50%; background: var(--primary); display: flex; align-items: center; justify-content: center; font-size: 24px; flex-shrink: 0; }
 .profile-name { font-weight: 800; font-size: 17px; }
-.profile-desc { font-size: 13px; color: #9ca3af; margin-top: 3px; }
+.profile-desc { font-size: 13px; color: #9aa0ab; margin-top: 3px; }
 
 /* ===== TOAST ===== */
 .toast {
   position: fixed; top: 60px; left: 50%; transform: translateX(-50%);
-  background: #2a2d4a; color: white; padding: 10px 20px;
+  background: #2b2e35; color: white; padding: 10px 20px;
   border-radius: 24px; font-size: 13px; font-weight: 600;
   z-index: 1000; opacity: 0; transition: opacity 0.3s;
   pointer-events: none; white-space: nowrap;
@@ -374,7 +375,7 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
 
 /* ===== DEFECTS ===== */
 .defect-card {
-  background: white; border-radius: var(--radius);
+  background: var(--card); border-radius: var(--radius);
   padding: 12px 14px; margin-bottom: 8px; box-shadow: var(--shadow);
   border-left: 3px solid var(--red);
 }
@@ -384,34 +385,34 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
 .source-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
 .source-btn {
   padding: 16px 10px; border-radius: 10px;
-  border: 2px solid var(--border); background: #1a1d2e;
+  border: 2px solid var(--border); background: #22242a;
   display: flex; flex-direction: column; align-items: center; gap: 6px;
   cursor: pointer; transition: all 0.2s; font-size: 12px; font-weight: 600; color: var(--text-light);
 }
 .source-btn .src-icon { font-size: 26px; }
-.source-btn.selected { border-color: var(--primary); background: #fff0f2; color: var(--primary); }
+.source-btn.selected { border-color: var(--primary); background: rgba(159,216,79,0.10); color: var(--primary); }
 .authorized-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
 .auth-btn {
   padding: 10px 8px; border-radius: 8px; border: 2px solid var(--border);
-  background: #1a1d2e; font-size: 12px; font-weight: 600; color: var(--text-light);
+  background: #22242a; font-size: 12px; font-weight: 600; color: var(--text-light);
   cursor: pointer; text-align: center; transition: all 0.2s;
 }
 .auth-btn.selected { border-color: var(--green); background: var(--green-bg); color: var(--green); }
 .ptipo-btn {
   padding: 12px 8px; border-radius: 8px; border: 2px solid var(--border);
-  background: #1a1d2e; font-size: 12px; font-weight: 700; color: var(--text-light);
+  background: #22242a; font-size: 12px; font-weight: 700; color: var(--text-light);
   cursor: pointer; text-align: center; transition: all 0.2s;
 }
-.ptipo-btn.selected { border-color: var(--primary); background: #fff0f2; color: var(--primary); }
+.ptipo-btn.selected { border-color: var(--primary); background: rgba(159,216,79,0.10); color: var(--primary); }
 .drop-zone {
   border: 2px dashed var(--border); border-radius: 10px;
   padding: 24px; text-align: center; cursor: pointer;
-  background: #13162a; transition: all 0.2s;
+  background: #1c1e23; transition: all 0.2s;
   color: var(--text-light); font-size: 13px;
 }
-.drop-zone.over { border-color: var(--primary); background: #fff0f2; }
+.drop-zone.over { border-color: var(--primary); background: rgba(159,216,79,0.10); }
 .intake-card {
-  background: white; border-radius: var(--radius);
+  background: var(--card); border-radius: var(--radius);
   padding: 12px 14px; margin-bottom: 8px; box-shadow: var(--shadow);
   border-left: 4px solid var(--primary); cursor: pointer;
 }
@@ -425,10 +426,10 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
 .bulk-sub { font-size:12px; color: var(--text-light); margin-top:2px; word-break:break-word; }
 .foto-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(96px,1fr)); gap:10px; margin-top:12px; }
 .foto-card { position:relative; }
-.foto-thumb { aspect-ratio:1; background:#1a1d2e center/cover no-repeat; border:1px solid var(--border); border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:20px; color:var(--text-light); cursor:pointer; }
+.foto-thumb { aspect-ratio:1; background:#22242a center/cover no-repeat; border:1px solid var(--border); border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:20px; color:var(--text-light); cursor:pointer; }
 .foto-meta { font-size:10px; color:var(--text-light); margin-top:4px; line-height:1.3; }
 .foto-del { position:absolute; top:5px; right:5px; background:rgba(0,0,0,.6); color:#fff; border:none; border-radius:50%; width:22px; height:22px; cursor:pointer; font-size:12px; line-height:1; }
-.parsed-field { display: flex; align-items: flex-start; gap: 8px; padding: 6px 0; border-bottom: 1px solid #f3f4f6; }
+.parsed-field { display: flex; align-items: flex-start; gap: 8px; padding: 6px 0; border-bottom: 1px solid #2b2e35; }
 .parsed-field:last-child { border-bottom: none; }
 .parsed-key { font-size: 11px; font-weight: 700; color: var(--text-light); text-transform: uppercase; min-width: 90px; padding-top: 2px; }
 .parsed-val { font-size: 13px; flex: 1; }
@@ -442,6 +443,22 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
   .fab { right: calc(50% - 300px + 16px); }
   .header { max-width: 100%; }
 }
+
+/* ===== GAE THEME OVERRIDES ===== */
+.header-title,.section-title,.card-title,.vehicle-model,.login-logo h1,.modal-title,.detail-header h2,.pipeline-stage-title{font-family:'Archivo Narrow',sans-serif;font-style:italic;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;}
+.header{border-bottom:3px solid;border-image:linear-gradient(90deg,#E9D24B,#9FD84F,#35D399) 1;}
+.header-logo{display:flex;align-items:center;gap:10px;}
+.profile-icon{color:#16171b;}
+.profile-icon svg{display:block;}
+.btn{border-radius:100px;}
+.btn-primary{background:linear-gradient(90deg,#E9D24B,#9FD84F);color:#16171b;font-weight:800;}
+.btn-primary:hover{background:linear-gradient(90deg,#E0C63F,#8fce45);}
+.btn-success{background:#35D399;color:#16171b;}
+.fab{background:linear-gradient(135deg,#E9D24B,#9FD84F);color:#16171b;}
+.progress-fill{background:linear-gradient(90deg,#E9D24B,#9FD84F);}
+.pipeline-count{color:#16171b;}
+.status-chip.active{background:rgba(159,216,79,0.10);}
+.badge-gray{background:#2b2e35;color:var(--text-light);}
 </style>
 </head>
 <body>
@@ -449,46 +466,47 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
 <!-- LOGIN SCREEN -->
 <div id="loginScreen" class="login-screen">
   <div class="login-logo">
-    <div class="login-chevron">⬡ CHEVROLET</div>
-    <h1>Braga Veículos</h1>
+    <img src="gae-logo.png" alt="GAE" style="width:80px;height:80px;object-fit:cover;border-radius:18px;border:1px solid #333640;margin:0 auto 8px;display:block">
+    <div class="login-chevron" style="font-size:20px;letter-spacing:3px">GAE</div>
+    <h1>Automania Group</h1>
     <p>Gestão de Preparação e Entrega</p>
   </div>
   <div style="width:100%;max-width:380px">
-    <p style="color:#9ca3af;font-size:13px;text-align:center;margin-bottom:16px">Selecione seu perfil para continuar</p>
+    <p style="color:#9aa0ab;font-size:13px;text-align:center;margin-bottom:16px">Selecione seu perfil para continuar</p>
     <button class="profile-option" onclick="login('gerente', 'Gerente')">
-      <div class="profile-icon">📊</div>
+      <div class="profile-icon"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg></div>
       <div><div class="profile-name">Gerente / Dashboard</div><div class="profile-desc">Visão geral, métricas e alertas</div></div>
     </button>
     <button class="profile-option" onclick="login('torre', 'Torre de Controle')">
-      <div class="profile-icon">🗼</div>
+      <div class="profile-icon"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2"/><path d="M16.24 7.76a6 6 0 0 1 0 8.49"/><path d="M7.76 16.24a6 6 0 0 1 0-8.49"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M4.93 19.07a10 10 0 0 1 0-14.14"/></svg></div>
       <div><div class="profile-name">Torre de Controle</div><div class="profile-desc">Monitora todo o fluxo, comunicação e atribuição de tarefas</div></div>
     </button>
     <button class="profile-option" onclick="login('programador', 'Programador')">
-      <div class="profile-icon">📋</div>
+      <div class="profile-icon"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg></div>
       <div><div class="profile-name">Programador</div><div class="profile-desc">Entrada das 4 planilhas, pipeline e agendamentos</div></div>
     </button>
     <button class="profile-option" onclick="login('programador', 'Co-Programador')">
-      <div class="profile-icon">👨‍💼</div>
+      <div class="profile-icon"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg></div>
       <div><div class="profile-name">Co-Programador</div><div class="profile-desc">Recebe pedidos, cadastra veículos e atualiza listas</div></div>
     </button>
     <button class="profile-option" onclick="login('preparador', 'Colaborador Pátio')">
-      <div class="profile-icon">🔧</div>
+      <div class="profile-icon"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-.6-.6-2.4z"/></svg></div>
       <div><div class="profile-name">Colaborador de Pátio</div><div class="profile-desc">Busca o veículo, foto do VIN SERIAL e preparação (etapa 1)</div></div>
     </button>
     <button class="profile-option" onclick="login('instalador', 'Instalação de Acessórios')">
-      <div class="profile-icon">🛠️</div>
+      <div class="profile-icon"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></div>
       <div><div class="profile-name">Instalação de Acessórios</div><div class="profile-desc">Instala e confirma acessórios e películas (na preparação)</div></div>
     </button>
     <button class="profile-option" onclick="login('lavador', 'Lavador / Tapete')">
-      <div class="profile-icon">✨</div>
+      <div class="profile-icon"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.7s6 5.7 6 10.3a6 6 0 0 1-12 0c0-4.6 6-10.3 6-10.3z"/></svg></div>
       <div><div class="profile-name">Lavador / Tapete</div><div class="profile-desc">Lavagem, acabamento e tapete de fábrica — inclui veículos sem acessório</div></div>
     </button>
     <button class="profile-option" onclick="login('tecnico', 'Equipe Técnica')">
-      <div class="profile-icon">🏁</div>
+      <div class="profile-icon"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><path d="M4 22V4"/></svg></div>
       <div><div class="profile-name">Equipe Técnica</div><div class="profile-desc">Conferência final, placa e validação (etapa 3)</div></div>
     </button>
     <button class="profile-option" onclick="login('entregador', 'Entregador Técnico')">
-      <div class="profile-icon">🚗</div>
+      <div class="profile-icon"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l1.5-4.5A2 2 0 0 1 8.4 7h7.2a2 2 0 0 1 1.9 1.3L19 13"/><path d="M3 13h18v4a1 1 0 0 1-1 1h-1"/><circle cx="7.5" cy="17.5" r="1.5"/><circle cx="16.5" cy="17.5" r="1.5"/></svg></div>
       <div><div class="profile-name">Entregador Técnico</div><div class="profile-desc">Entrega ao cliente, fotos finais e Planilha 4 (etapa 4)</div></div>
     </button>
     <div style="margin-top:18px;text-align:center;border-top:1px solid var(--border);padding-top:14px">
@@ -504,13 +522,14 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
 <!-- HEADER -->
 <div class="header">
   <div class="header-logo">
+    <img src="gae-logo.png" alt="GAE" style="height:34px;width:34px;object-fit:cover;border-radius:8px;border:1px solid #333640">
     <div>
-      <div class="header-title">Braga Veículos</div>
+      <div class="header-title">GAE</div>
       <div class="header-subtitle">Preparação & Entrega</div>
     </div>
   </div>
   <div style="display:flex;align-items:center;gap:8px">
-    <div id="cloudChip" title="Status da sincronização em nuvem" style="font-size:12px;font-weight:700;padding:6px 10px;border-radius:16px;background:var(--card);color:var(--text-light)">☁️ Local</div>
+    <div id="cloudChip" title="Status da sincronização em nuvem" style="font-size:12px;font-weight:700;padding:6px 10px;border-radius:16px;background:var(--card);color:var(--text-light)">Local</div>
     <div class="profile-badge" onclick="logout()" id="profileBadge">—</div>
   </div>
 </div>
@@ -528,12 +547,12 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
     </div>
 
     <div class="card" id="torreCard" style="margin-bottom:10px;display:none">
-      <div class="card-header"><div class="card-title">🗼 Torre de Controle — Pendências</div></div>
+      <div class="card-header"><div class="card-title">Torre de Controle — Pendências</div></div>
       <div id="dashTorre"></div>
     </div>
 
     <div class="card" style="margin-bottom:10px">
-      <div class="card-header"><div class="card-title">📅 Entregas Hoje</div></div>
+      <div class="card-header"><div class="card-title">Entregas Hoje</div></div>
       <div id="dashToday"></div>
     </div>
 
@@ -551,11 +570,11 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
     </div>
     <div class="status-bar" id="stageFilter">
       <div class="status-chip active" data-stage="all" onclick="filterStage('all',this)">Todos</div>
-      <div class="status-chip" data-stage="0" onclick="filterStage('0',this)">🔧 Preparação</div>
-      <div class="status-chip" data-stage="1" onclick="filterStage('1',this)">📄 Pré-Entrega</div>
-      <div class="status-chip" data-stage="2" onclick="filterStage('2',this)">🏁 Conf. Final</div>
-      <div class="status-chip" data-stage="3" onclick="filterStage('3',this)">🚗 Entrega</div>
-      <div class="status-chip" data-stage="4" onclick="filterStage('4',this)">✅ Entregue</div>
+      <div class="status-chip" data-stage="0" onclick="filterStage('0',this)">Preparação</div>
+      <div class="status-chip" data-stage="1" onclick="filterStage('1',this)">Pré-Entrega</div>
+      <div class="status-chip" data-stage="2" onclick="filterStage('2',this)">Conf. Final</div>
+      <div class="status-chip" data-stage="3" onclick="filterStage('3',this)">Entrega</div>
+      <div class="status-chip" data-stage="4" onclick="filterStage('4',this)">Entregue</div>
     </div>
     <div id="vehiclesList"></div>
   </div>
@@ -573,11 +592,11 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
     <div id="entradaQuickActions" style="display:none;margin-bottom:14px">
       <div style="font-size:13px;font-weight:700;color:var(--text-light);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px">Ação Rápida</div>
       <button class="btn btn-success btn-block" onclick="openIntakePreFilled()" style="font-size:15px;padding:16px">
-        💬 Recebi mensagem do Programador — Cadastrar Veículo
+        Recebi mensagem do Programador — Cadastrar Veículo
       </button>
     </div>
     <div class="section-header">
-      <div class="section-title">📥 Entradas Recebidas</div>
+      <div class="section-title">Entradas Recebidas</div>
       <button class="btn btn-primary btn-sm" onclick="openIntakeModal()">+ Nova Entrada</button>
     </div>
     <div id="intakeList"></div>
@@ -744,9 +763,9 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
       <div class="form-group">
         <label class="form-label">Severidade</label>
         <select class="form-control" id="def_severity">
-          <option value="alta">🔴 Alta</option>
-          <option value="media">🟡 Média</option>
-          <option value="baixa">🟢 Baixa</option>
+          <option value="alta">Alta</option>
+          <option value="media">Média</option>
+          <option value="baixa">Baixa</option>
         </select>
       </div>
     </div>
@@ -767,7 +786,7 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
   <div class="detail-body">
     <div class="detail-tabs">
       <button class="detail-tab active" onclick="showDetailTab('info',this)">Geral</button>
-      <button class="detail-tab" onclick="showDetailTab('fotos',this)">📷 Fotos</button>
+      <button class="detail-tab" onclick="showDetailTab('fotos',this)">Fotos</button>
       <button class="detail-tab" onclick="showDetailTab('checklist',this)">Checklist</button>
       <button class="detail-tab" onclick="showDetailTab('accessories',this)">Acessórios</button>
       <button class="detail-tab" onclick="showDetailTab('history',this)">Histórico</button>
@@ -784,7 +803,7 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
 <div class="modal-overlay" id="intakeModal" style="align-items:flex-start;padding-top:0">
   <div class="modal" style="border-radius:0;max-height:100vh;min-height:100vh;padding-bottom:24px">
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
-      <button onclick="closeModal('intakeModal')" style="background:none;border:none;font-size:22px;color:#6b7280;cursor:pointer">✕</button>
+      <button onclick="closeModal('intakeModal')" style="background:none;border:none;font-size:22px;color:#9aa0ab;cursor:pointer">✕</button>
       <div style="font-size:17px;font-weight:700">Nova Entrada de Pedido</div>
     </div>
 
@@ -793,19 +812,19 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
       <div class="form-label" style="margin-bottom:8px">Origem do pedido</div>
       <div class="source-grid">
         <button class="source-btn" id="src_email" onclick="selectSource('email')">
-          <span class="src-icon">📧</span><span>E-mail</span>
+          <span class="src-icon"></span><span>E-mail</span>
         </button>
         <button class="source-btn" id="src_whatsapp" onclick="selectSource('whatsapp')">
-          <span class="src-icon">💬</span><span>WhatsApp</span>
+          <span class="src-icon"></span><span>WhatsApp</span>
         </button>
         <button class="source-btn" id="src_pdf" onclick="selectSource('pdf')">
-          <span class="src-icon">📄</span><span>PDF</span>
+          <span class="src-icon"></span><span>PDF</span>
         </button>
         <button class="source-btn" id="src_image" onclick="selectSource('image')">
-          <span class="src-icon">🖼️</span><span>Imagem / Print</span>
+          <span class="src-icon"></span><span>Imagem / Print</span>
         </button>
         <button class="source-btn" id="src_planilha" onclick="selectSource('planilha')" style="grid-column:1/-1">
-          <span class="src-icon">📋</span><span>Planilhas de programação (lote — v5.1)</span>
+          <span class="src-icon"></span><span>Planilhas de programação (lote — v5.1)</span>
         </button>
       </div>
 
@@ -813,22 +832,22 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
       <div id="planilhaTipoBlock" style="display:none;margin-bottom:14px">
         <div class="form-label" style="margin-bottom:8px">Qual planilha? (Fluxograma v5.1)</div>
         <div class="source-grid" style="grid-template-columns:1fr 1fr;margin-bottom:6px">
-          <button class="ptipo-btn selected" id="ptipo_preparacao" onclick="selectPlanilhaTipo('preparacao')">1 · 🔧 Preparação</button>
-          <button class="ptipo-btn" id="ptipo_entrega" onclick="selectPlanilhaTipo('entrega')">2 · 🚗 Entrega (agendar)</button>
-          <button class="ptipo-btn" id="ptipo_reagendamento" onclick="selectPlanilhaTipo('reagendamento')">3 · 🔁 Reagendamento</button>
-          <button class="ptipo-btn" id="ptipo_entregues" onclick="selectPlanilhaTipo('entregues')">4 · ✅ Entregues</button>
+          <button class="ptipo-btn selected" id="ptipo_preparacao" onclick="selectPlanilhaTipo('preparacao')">1 · Preparação</button>
+          <button class="ptipo-btn" id="ptipo_entrega" onclick="selectPlanilhaTipo('entrega')">2 · Entrega (agendar)</button>
+          <button class="ptipo-btn" id="ptipo_reagendamento" onclick="selectPlanilhaTipo('reagendamento')">3 · Reagendamento</button>
+          <button class="ptipo-btn" id="ptipo_entregues" onclick="selectPlanilhaTipo('entregues')">4 · Entregues</button>
         </div>
         <div id="ptipoHint" style="font-size:12px;color:var(--text-light)"></div>
       </div>
 
       <!-- Planilha: upload de PDF (extração automática) -->
       <div id="planilhaPdfBlock" style="display:none;margin-bottom:14px">
-        <div class="form-label" style="margin-bottom:6px">📄 Ler direto de um PDF (sem colar)</div>
+        <div class="form-label" style="margin-bottom:6px">Ler direto de um PDF (sem colar)</div>
         <div class="drop-zone" id="planilhaDrop" onclick="document.getElementById('planilhaPdfInput').click()"
           ondragover="event.preventDefault();this.classList.add('over')"
           ondragleave="this.classList.remove('over')"
           ondrop="event.preventDefault();this.classList.remove('over');handlePlanilhaPdf({target:{files:event.dataTransfer.files}})">
-          <div style="font-size:28px;margin-bottom:6px">📄⬆️</div>
+          <div style="font-size:28px;margin-bottom:6px"></div>
           <div style="font-weight:600">Toque para escolher o PDF da planilha</div>
           <div style="font-size:12px;margin-top:4px">PLANILHA DE ENTREGA / preparação · extração automática</div>
         </div>
@@ -839,15 +858,15 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
 
       <!-- WhatsApp authorized sender -->
       <div id="authBlock" style="display:none;margin-bottom:16px">
-        <div class="form-label" style="margin-bottom:8px">⚠️ Remetente Autorizado (obrigatório)</div>
+        <div class="form-label" style="margin-bottom:8px">Remetente Autorizado (obrigatório)</div>
         <div class="authorized-grid">
-          <button class="auth-btn" id="auth_adriana" onclick="selectSender('Adriana')">👩 Adriana</button>
-          <button class="auth-btn" id="auth_adriano" onclick="selectSender('Adriano')">👨 Adriano</button>
-          <button class="auth-btn" id="auth_junior" onclick="selectSender('Junior Leão')">👨 Junior Leão</button>
-          <button class="auth-btn" id="auth_adrianojr" onclick="selectSender('Adriano Junior')">👦 Adriano Junior</button>
+          <button class="auth-btn" id="auth_adriana" onclick="selectSender('Adriana')">Adriana</button>
+          <button class="auth-btn" id="auth_adriano" onclick="selectSender('Adriano')">Adriano</button>
+          <button class="auth-btn" id="auth_junior" onclick="selectSender('Junior Leão')">Junior Leão</button>
+          <button class="auth-btn" id="auth_adrianojr" onclick="selectSender('Adriano Junior')">Adriano Junior</button>
         </div>
         <div id="unauthorizedWarn" style="display:none;background:var(--red-bg);color:var(--red);border-radius:8px;padding:10px;font-size:13px;font-weight:600;margin-bottom:8px">
-          ⛔ Somente Adriana, Adriano, Junior Leão e Adriano Junior podem enviar pedidos via WhatsApp.
+          Somente Adriana, Adriano, Junior Leão e Adriano Junior podem enviar pedidos via WhatsApp.
         </div>
       </div>
 
@@ -865,7 +884,7 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
           ondragover="event.preventDefault();this.classList.add('over')"
           ondragleave="this.classList.remove('over')"
           ondrop="handleDrop(event)">
-          <div style="font-size:32px;margin-bottom:8px">📁</div>
+          <div style="font-size:32px;margin-bottom:8px"></div>
           <div style="font-weight:600">Toque para selecionar arquivo</div>
           <div style="font-size:12px;margin-top:4px">PDF, JPG, PNG, WEBP</div>
         </div>
@@ -879,20 +898,20 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
       </div>
 
       <button class="btn btn-primary btn-block" onclick="processIntake()" id="btnProcess" disabled style="margin-top:8px">
-        🔍 Processar e Extrair Dados
+        Processar e Extrair Dados
       </button>
     </div>
 
     <!-- Step 2: parsed results + confirm form -->
     <div id="intakeStep2" style="display:none">
       <div style="background:var(--green-bg);border-radius:10px;padding:12px;margin-bottom:14px">
-        <div style="font-weight:700;color:var(--green);font-size:14px">✅ Dados extraídos automaticamente</div>
-        <div style="font-size:12px;color:#166534;margin-top:3px">Revise os campos abaixo antes de confirmar</div>
+        <div style="font-weight:700;color:var(--green);font-size:14px">Dados extraídos automaticamente</div>
+        <div style="font-size:12px;color:#35D399;margin-top:3px">Revise os campos abaixo antes de confirmar</div>
         <div class="confidence-bar"><div class="confidence-fill" id="confBar" style="width:0%"></div></div>
-        <div style="font-size:11px;color:#166534;margin-top:4px" id="confLabel"></div>
+        <div style="font-size:11px;color:#35D399;margin-top:4px" id="confLabel"></div>
       </div>
 
-      <div id="parsedPreview" style="background:#f9fafb;border-radius:8px;padding:10px;margin-bottom:14px;font-size:13px"></div>
+      <div id="parsedPreview" style="background:#191b20;border-radius:8px;padding:10px;margin-bottom:14px;font-size:13px"></div>
 
       <div style="font-weight:700;font-size:14px;margin-bottom:10px">Confirmar / Ajustar Cadastro</div>
 
@@ -960,8 +979,8 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
     <!-- Step 3: resultado da importação em lote (aplicada automaticamente) -->
     <div id="intakeStep3" style="display:none">
       <div style="background:var(--green-bg);border-radius:10px;padding:12px;margin-bottom:14px">
-        <div style="font-weight:700;color:var(--green);font-size:14px">✅ Importação concluída</div>
-        <div style="font-size:12px;color:#166534;margin-top:3px">Veículos novos foram cadastrados e os já existentes, atualizados automaticamente (com 🔔 tag de alerta na lista).</div>
+        <div style="font-weight:700;color:var(--green);font-size:14px">Importação concluída</div>
+        <div style="font-size:12px;color:#35D399;margin-top:3px">Veículos novos foram cadastrados e os já existentes, atualizados automaticamente (com tag de alerta na lista).</div>
       </div>
       <div id="bulkSummary" style="font-size:13px;margin-bottom:10px"></div>
       <div id="bulkList" style="max-height:46vh;overflow:auto;margin-bottom:12px"></div>
@@ -980,15 +999,17 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
 <div class="toast" id="toast"></div>
 
 <script>
-// ===== CANONICALIZA A URL =====
-// Se o app for aberto por engano numa URL de Deploy Preview / branch do Netlify
-// (algo como "…--entrega-braga.netlify.app"), manda para a PRODUÇÃO. Isso evita
-// o widget "Netlify Drawer" (que só aparece em previews) e mantém todo mundo no
-// mesmo endereço/dados. Produção ("entrega-braga.netlify.app", sem "--") e
-// domínios próprios não são afetados.
+// ===== CANONICALIZA A URL (só no app instalado) =====
+// Se o app INSTALADO (PWA em tela cheia) for aberto numa URL de Deploy Preview
+// /branch do Netlify ("…--entrega-braga.netlify.app"), manda para a PRODUÇÃO —
+// evita ficar preso num preview e o widget "Netlify Drawer". No NAVEGADOR
+// (revisão de PR) NÃO redireciona, para os previews continuarem testáveis.
+// Produção (sem "--") e domínios próprios não são afetados.
 try {
   if (typeof location !== 'undefined' && /--entrega-braga\.netlify\.app$/.test(location.hostname || '')) {
-    location.replace('https://entrega-braga.netlify.app' + location.pathname + location.search + location.hash);
+    var _standalone = (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)
+                      || (typeof navigator !== 'undefined' && navigator.standalone === true);
+    if (_standalone) location.replace('https://entrega-braga.netlify.app' + location.pathname + location.search + location.hash);
   }
 } catch (e) {}
 
@@ -1002,25 +1023,25 @@ const USE_LOCAL = _storageAvailable();
 
 // ===== DATA STORE =====
 const STAGES = [
-  { name: 'Preparação no Estoque', icon: '🔧', days: 1, color: '#8b5cf6',  resp: 'Colaborador Pátio' },
-  { name: 'Pré-Entrega',           icon: '📄', days: 1, color: '#06b6d4',  resp: 'Programador' },
-  { name: 'Conferência Final',     icon: '🏁', days: 0, color: '#e8394f',  resp: 'Equipe Técnica' },
-  { name: 'Entrega ao Cliente',    icon: '🚗', days: 0, color: '#16a34a',  resp: 'Entregador Técnico' },
-  { name: 'Entregue',              icon: '✅', days: 0, color: '#16a34a',  resp: '—' }
+  { name: 'Preparação no Estoque', icon: '', days: 1, color: '#8b5cf6',  resp: 'Colaborador Pátio' },
+  { name: 'Pré-Entrega',           icon: '', days: 1, color: '#06b6d4',  resp: 'Programador' },
+  { name: 'Conferência Final',     icon: '', days: 0, color: '#e8394f',  resp: 'Equipe Técnica' },
+  { name: 'Entrega ao Cliente',    icon: '', days: 0, color: '#16a34a',  resp: 'Entregador Técnico' },
+  { name: 'Entregue',              icon: '', days: 0, color: '#16a34a',  resp: '—' }
 ];
 
 const CHECKLIST_TEMPLATES = [
   { // Etapa 0: Preparação no Estoque
     stage: 0, items: [
-      '📸 OBRIGATÓRIO — Foto do adesivo GM (VIN SERIAL) registrada',
+      'OBRIGATÓRIO — Foto do adesivo GM (VIN SERIAL) registrada',
       'VIN SERIAL confere com a planilha ✓',
       'Veículo localizado fisicamente no estoque',
-      'Inspeção visual — se houver avaria: 📸 foto + acionar equipe imediatamente',
+      'Inspeção visual — se houver avaria: foto + acionar equipe imediatamente',
       'Frota/Locadora (Via Rápida)? Se SIM: apenas lavagem + tapete (prioridade)',
       'Acessórios instalados — item a item',
       'Insulfilm / películas aplicados',
       'Conferência do responsável — qualidade aprovada',
-      '📲 Comunicar conclusão: Equipe + Vendedor + Gerência + Torre'
+      'Comunicar conclusão: Equipe + Vendedor + Gerência + Torre'
     ]
   },
   { // Etapa 1: Pré-Entrega
@@ -1030,7 +1051,7 @@ const CHECKLIST_TEMPLATES = [
       'Documentos de emplacamento OK',
       'Data e horário de entrega confirmados com o cliente (Planilha 2 — 48h antes)',
       'Veículo pré-separado para a entrega',
-      '📲 Comunicar conclusão a todos'
+      'Comunicar conclusão a todos'
     ]
   },
   { // Etapa 2: Conferência Final
@@ -1039,20 +1060,20 @@ const CHECKLIST_TEMPLATES = [
       'Acessórios e películas conferidos',
       'Lavagem e acabamento aprovados',
       'PLACA instalada e conferida ✓',
-      '📸 OBRIGATÓRIO — Foto da placa instalada',
+      'OBRIGATÓRIO — Foto da placa instalada',
       'Líder do posto de lavagem conduz o veículo até a Área de Entrega',
-      'Equipe Técnica Braga recebe e valida',
-      '📲 Comunicar: pronto para entrega'
+      'Equipe Técnica GAE recebe e valida',
+      'Comunicar: pronto para entrega'
     ]
   },
   { // Etapa 3: Entrega ao Cliente
     stage: 3, items: [
-      'Entregador Técnico Braga aciona o cliente',
+      'Entregador Técnico GAE aciona o cliente',
       'Conferência final do veículo com o cliente',
-      '📸 OBRIGATÓRIO — Foto do VIN SERIAL + placa (registro final)',
+      'OBRIGATÓRIO — Foto do VIN SERIAL + placa (registro final)',
       'Aceite / assinatura do cliente',
       'Atualizar Planilha 4 (Entregues)',
-      '📲 Comunicação final de encerramento'
+      'Comunicação final de encerramento'
     ]
   }
 ];
@@ -1115,7 +1136,7 @@ function login(profile, userName) {
   const canAdd = ['programador','gerente','torre'].includes(profile);
   document.getElementById('fabBtn').style.display = canAdd ? 'flex' : 'none';
   if (!USE_LOCAL) {
-    setTimeout(() => toast('⚠️ Modo memória — dados não salvos ao fechar'), 1500);
+    setTimeout(() => toast('Modo memória — dados não salvos ao fechar'), 1500);
   }
   renderAll();
   setDefaultDate();
@@ -1162,7 +1183,7 @@ function renderAll() {
 }
 
 // ===== DASHBOARD =====
-// 🗼 Torre de Controle — pendências que precisam de ação/atribuição/comunicação.
+// Torre de Controle — pendências que precisam de ação/atribuição/comunicação.
 function renderTorre(data, active) {
   const el = document.getElementById('dashTorre');
   const card = document.getElementById('torreCard');
@@ -1173,15 +1194,15 @@ function renderTorre(data, active) {
   const semData    = active.filter(v => v.stage>=1 && !v.deliveryDate);
   const atrasados  = active.filter(v => getStatus(v)==='red');
   const groups = [
-    { icon:'🔢', label:'Chassi/VIN SERIAL não conferido', list:chassiPend, color:'red' },
-    { icon:'📲', label:'Comunicação pendente', list:commPend, color:'yellow' },
-    { icon:'👤', label:'Sem responsável atribuído', list:semResp, color:'blue' },
-    { icon:'🗓️', label:'Pré-Entrega sem data', list:semData, color:'yellow' },
-    { icon:'⏰', label:'Atrasados', list:atrasados, color:'red' }
+    { icon:'', label:'Chassi/VIN SERIAL não conferido', list:chassiPend, color:'red' },
+    { icon:'', label:'Comunicação pendente', list:commPend, color:'yellow' },
+    { icon:'', label:'Sem responsável atribuído', list:semResp, color:'blue' },
+    { icon:'', label:'Pré-Entrega sem data', list:semData, color:'yellow' },
+    { icon:'', label:'Atrasados', list:atrasados, color:'red' }
   ];
   const totalPend = groups.reduce((s,g)=>s+g.list.length,0);
   if(totalPend===0){
-    el.innerHTML = '<div style="color:var(--green);font-weight:600;font-size:13px;padding:4px 0">✅ Sem pendências — fluxo em dia.</div>';
+    el.innerHTML = '<div style="color:var(--green);font-weight:600;font-size:13px;padding:4px 0">Sem pendências — fluxo em dia.</div>';
   } else {
     el.innerHTML = groups.filter(g=>g.list.length).map(g => `
       <div style="margin-bottom:8px">
@@ -1190,7 +1211,7 @@ function renderTorre(data, active) {
           <span class="badge badge-${g.color}">${g.list.length}</span>
         </div>
         <div style="display:none;margin-top:4px">
-          ${g.list.map(v => `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f3f4f6;cursor:pointer" onclick="openDetail(${v.id})"><div style="font-size:13px">${v.model} — ${v.client}</div><div style="font-size:11px;color:#6b7280">${_stageName(v.stage)}</div></div>`).join('')}
+          ${g.list.map(v => `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #2b2e35;cursor:pointer" onclick="openDetail(${v.id})"><div style="font-size:13px">${v.model} — ${v.client}</div><div style="font-size:11px;color:#9aa0ab">${_stageName(v.stage)}</div></div>`).join('')}
         </div>
       </div>`).join('');
   }
@@ -1218,13 +1239,13 @@ function renderDashboard() {
   const todayDel = data.vehicles.filter(v => v.deliveryDate === today && v.stage < 4);
   const todayDiv = document.getElementById('dashToday');
   if(todayDel.length === 0) {
-    todayDiv.innerHTML = '<div style="color:#6b7280;font-size:13px;padding:4px 0">Nenhuma entrega agendada para hoje.</div>';
+    todayDiv.innerHTML = '<div style="color:#9aa0ab;font-size:13px;padding:4px 0">Nenhuma entrega agendada para hoje.</div>';
   } else {
     todayDiv.innerHTML = todayDel.map(v => `
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #f3f4f6;cursor:pointer" onclick="openDetail(${v.id})">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #2b2e35;cursor:pointer" onclick="openDetail(${v.id})">
         <div>
           <div style="font-weight:700;font-size:14px">${v.model} — ${v.client}</div>
-          <div style="font-size:12px;color:#6b7280">${v.plate || 'S/Placa'}</div>
+          <div style="font-size:12px;color:#9aa0ab">${v.plate || 'S/Placa'}</div>
         </div>
         <span class="badge badge-${getStatus(v)}">${STAGES[v.stage].name}</span>
       </div>
@@ -1249,12 +1270,12 @@ function renderDashboard() {
           </div>
         </div>
         <div style="display:${idx<4?'block':'none'}">
-          ${vehicles.length === 0 ? '<div style="padding:10px 14px;color:#6b7280;font-size:13px">Nenhum veículo nesta etapa</div>' :
+          ${vehicles.length === 0 ? '<div style="padding:10px 14px;color:#9aa0ab;font-size:13px">Nenhum veículo nesta etapa</div>' :
             vehicles.map(v => `
-              <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid #f3f4f6;cursor:pointer" onclick="openDetail(${v.id})">
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid #2b2e35;cursor:pointer" onclick="openDetail(${v.id})">
                 <div>
                   <div style="font-weight:600;font-size:13px">${v.model} — ${v.client}</div>
-                  <div style="font-size:11px;color:#6b7280">${v.plate||'S/Placa'} · ${daysInStage(v)} dia(s) nesta etapa</div>
+                  <div style="font-size:11px;color:#9aa0ab">${v.plate||'S/Placa'} · ${daysInStage(v)} dia(s) nesta etapa</div>
                 </div>
                 <div style="width:10px;height:10px;border-radius:50%;background:var(--${getStatus(v)});flex-shrink:0"></div>
               </div>
@@ -1283,7 +1304,7 @@ function renderVehicles() {
   });
   const container = document.getElementById('vehiclesList');
   if(list.length === 0) {
-    container.innerHTML = `<div class="empty"><div class="empty-icon">🚗</div><div class="empty-text">Nenhum veículo encontrado</div></div>`;
+    container.innerHTML = `<div class="empty"><div class="empty-icon"></div><div class="empty-text">Nenhum veículo encontrado</div></div>`;
     return;
   }
   container.innerHTML = list.map(v => {
@@ -1294,7 +1315,7 @@ function renderVehicles() {
       <div class="vehicle-card status-${status}" onclick="openDetail(${v.id})">
         <div class="vehicle-info">
           <div>
-            <div class="vehicle-model">${v.model}${v.color?' · '+v.color:''} ${v.changed?'<span class="badge badge-yellow" style="font-size:10px;vertical-align:middle">🔔 Alterado</span>':''}${v.viaRapida?'<span class="badge badge-blue" style="font-size:10px;vertical-align:middle">⚡ Via Rápida</span>':''}${v.reagendado?'<span class="badge badge-red" style="font-size:10px;vertical-align:middle">🔁 Reagendado</span>':''}${v.commPendente!=null?'<span class="badge badge-yellow" style="font-size:10px;vertical-align:middle">📲 Comunicar</span>':''}</div>
+            <div class="vehicle-model">${v.model}${v.color?' · '+v.color:''} ${v.changed?'<span class="badge badge-yellow" style="font-size:10px;vertical-align:middle">Alterado</span>':''}${v.viaRapida?'<span class="badge badge-blue" style="font-size:10px;vertical-align:middle">Via Rápida</span>':''}${v.reagendado?'<span class="badge badge-red" style="font-size:10px;vertical-align:middle">Reagendado</span>':''}${v.commPendente!=null?'<span class="badge badge-yellow" style="font-size:10px;vertical-align:middle">Comunicar</span>':''}</div>
             <div class="vehicle-meta">${v.client}</div>
           </div>
           <span class="badge badge-${status==='green'?'green':status==='yellow'?'yellow':'red'}">${STAGES[v.stage].name}</span>
@@ -1305,8 +1326,8 @@ function renderVehicles() {
           <span class="stage-label">${days} dia(s) em prep.</span>
         </div>
         <div style="margin-top:8px;display:flex;justify-content:space-between;align-items:center">
-          <span style="font-size:11px;color:#6b7280">${v.accessories && v.accessories.length > 0 ? `🛠️ ${v.accessories.filter(a=>a.installed).length}/${v.accessories.length}` : ''}${v.fotos && v.fotos.length ? `${v.accessories&&v.accessories.length?' · ':''}📷 ${v.fotos.length}` : ''}</span>
-          <span style="font-size:11px;background:#252840;padding:2px 8px;border-radius:10px;color:var(--text-light)">👤 ${v.assignee || STAGES[v.stage].resp}</span>
+          <span style="font-size:11px;color:#9aa0ab">${v.accessories && v.accessories.length > 0 ? `${v.accessories.filter(a=>a.installed).length}/${v.accessories.length}` : ''}${v.fotos && v.fotos.length ? `${v.accessories&&v.accessories.length?' · ':''}${v.fotos.length}` : ''}</span>
+          <span style="font-size:11px;background:#2b2e35;padding:2px 8px;border-radius:10px;color:var(--text-light)">${v.assignee || STAGES[v.stage].resp}</span>
         </div>
       </div>
     `;
@@ -1319,7 +1340,7 @@ function openDetail(id) {
   const data = getStorage();
   const v = data.vehicles.find(v => v.id === id);
   if(!v) return;
-  if(v.changed){ v.changed = null; setStorage(data); }   // abriu = visto: limpa a tag 🔔
+  if(v.changed){ v.changed = null; setStorage(data); }   // abriu = visto: limpa a tag 
   document.getElementById('detailTitle').textContent = `${v.model} — ${v.client}`;
   const status = getStatus(v);
   document.getElementById('detailBadge').innerHTML = `<span class="badge badge-${status==='green'?'green':status==='yellow'?'yellow':'red'}">${STAGES[v.stage].name}</span>`;
@@ -1365,7 +1386,7 @@ function onPhotoSelected(e) {
   const file = e.target.files && e.target.files[0];
   try { e.target.value = ''; } catch(_) {}
   if (!file) return;
-  toast('📷 Processando foto...');
+  toast('Processando foto...');
   compressImage(file, 1280, 0.55)
     .then(function (dataUrl) { addVehiclePhoto(_photoType || 'Outra', dataUrl); })
     .catch(function (err) { console.warn('[foto] erro:', err); toast('Não consegui processar a foto'); });
@@ -1403,11 +1424,11 @@ function addVehiclePhoto(type, dataUrl) {
   v.fotos = v.fotos || [];
   v.fotos.push({ id: id, type: type, ts: ts, user: user });
   v.history = v.history || [];
-  v.history.push({ ts: ts, action: '📷 Foto registrada (' + type + ')', user: user });
+  v.history.push({ ts: ts, action: 'Foto registrada (' + type + ')', user: user });
   setStorage(data);   // sincroniza só os metadados (imagem vai p/ coleção separada)
   if (window.CloudSync && window.CloudSync.savePhoto) window.CloudSync.savePhoto(id, { d: dataUrl, chassi: v.chassi || '', type: type, ts: Date.now() });
   renderDetailTab('fotos');
-  toast('📷 Foto registrada');
+  toast('Foto registrada');
   if (type === 'VIN SERIAL') verifyChassi(dataUrl);   // OCR + cruzamento com a grade
 }
 function getPhoto(id) {
@@ -1424,31 +1445,31 @@ function getPhoto(id) {
 function renderDetailFotos(v) {
   const el = document.getElementById('detailTabFotos');
   const fotos = v.fotos || [];
-  const tipos = [['VIN SERIAL','🔢'],['Avaria','⚠️'],['Placa','🔖'],['Outra','📷']];
+  const tipos = [['VIN SERIAL',''],['Avaria',''],['Placa',''],['Outra','']];
   const btns = tipos.map(function (t) {
     return '<button class="btn btn-secondary btn-sm" onclick="capturePhoto(\'' + t[0] + '\')">' + t[1] + ' ' + t[0] + '</button>';
   }).join(' ');
   const grid = fotos.length ? fotos.map(function (f) {
     return '<div class="foto-card">' +
-      '<div class="foto-thumb" id="foto-' + f.id + '" onclick="viewPhoto(\'' + f.id + '\')">⏳</div>' +
+      '<div class="foto-thumb" id="foto-' + f.id + '" onclick="viewPhoto(\'' + f.id + '\')"></div>' +
       '<button class="foto-del" onclick="deletePhoto(\'' + f.id + '\')">✕</button>' +
       '<div class="foto-meta"><b>' + f.type + '</b><br>' + formatDateTime(f.ts) + (f.user ? '<br>' + f.user : '') + '</div>' +
       '</div>';
-  }).join('') : '<div class="empty"><div class="empty-icon">📷</div><div class="empty-text">Nenhuma foto ainda.<br>Use os botões acima para registrar a vistoria no pátio.</div></div>';
+  }).join('') : '<div class="empty"><div class="empty-icon"></div><div class="empty-text">Nenhuma foto ainda.<br>Use os botões acima para registrar a vistoria no pátio.</div></div>';
   // Banner de verificação do chassi (OCR x grade)
   var ver = '';
   if (v.chassi) {
-    if (v.chassiCheck === 'checking') ver = '<div class="card" style="background:var(--blue-bg);color:var(--blue)">🔍 Lendo o chassi da foto…</div>';
+    if (v.chassiCheck === 'checking') ver = '<div class="card" style="background:var(--blue-bg);color:var(--blue)">Lendo o chassi da foto…</div>';
     else if (v.chassiVerificado) { var lbl = (v.chassiOCR && v.chassiOCR.modo === 'serial') ? 'VIN SERIAL' : 'Chassi'; ver = '<div class="card" style="background:var(--green-bg);color:var(--green);font-weight:700">✓ ' + lbl + ' conferido com a grade' + (v.chassiOverride ? ' (liberação manual)' : (v.chassiOCR ? ' — leitura ' + v.chassiOCR.ratio + '%' + (v.chassiOCR.fonte ? ' · OCR ' + v.chassiOCR.fonte : '') : '')) + '</div>'; }
     else if (v.chassiOCR && !v.chassiOCR.ok) { var lbl2 = (v.chassiOCR.modo === 'serial') ? 'VIN SERIAL' : 'Chassi'; ver = '<div class="card" style="background:var(--red-bg);color:var(--red);font-weight:700">✗ ' + lbl2 + ' NÃO confere<br><span style="font-weight:400;font-size:12px">Leitura: <b>' + (v.chassiOCR.lido || '—') + '</b> · Grade: <b>' + v.chassiOCR.esperado + '</b> — tire a foto de novo (adesivo GM legível).</span></div>'; }
-    else if (v.chassiCheck === 'error') ver = '<div class="card" style="background:var(--yellow-bg)">⚠️ Não foi possível ler o chassi (precisa de internet na 1ª vez). Tente "Verificar chassi".</div>';
+    else if (v.chassiCheck === 'error') ver = '<div class="card" style="background:var(--yellow-bg)">Não foi possível ler o chassi (precisa de internet na 1ª vez). Tente "Verificar chassi".</div>';
   }
   el.innerHTML =
     ver +
-    '<div class="card"><div class="card-title" style="margin-bottom:8px">📷 Vistoria no pátio</div>' +
+    '<div class="card"><div class="card-title" style="margin-bottom:8px">Vistoria no pátio</div>' +
     '<div style="font-size:12px;color:var(--text-light);margin-bottom:10px">Tire as fotos com a câmera do celular: chassi, avarias e a placa (quando houver). A foto do <b>chassi</b> é lida automaticamente e conferida com a grade.</div>' +
     '<div style="display:flex;gap:8px;flex-wrap:wrap">' + btns +
-    (v.chassi ? ' <button class="btn btn-primary btn-sm" onclick="reverifyChassi()">🔍 Verificar chassi</button>' : '') +
+    (v.chassi ? ' <button class="btn btn-primary btn-sm" onclick="reverifyChassi()">Verificar chassi</button>' : '') +
     '</div></div>' +
     '<div class="foto-grid">' + grid + '</div>';
   fotos.forEach(function (f) {
@@ -1579,7 +1600,7 @@ function verifyChassi(dataUrl) {
   if (!v.chassi) { toast('Sem chassi na grade para comparar'); return; }
   v.chassiCheck = 'checking'; setStorage(data);
   if (currentVehicleId === vid) renderDetailTab(currentDetailTab);
-  toast('🔍 Lendo o chassi da foto...');
+  toast('Lendo o chassi da foto...');
   ocrRead(dataUrl).then(function (res) {
     var text = res.text, fonte = res.fonte;
     var d = getStorage(); var vv = d.vehicles.find(function (x) { return x.id === vid; }); if (!vv) return;
@@ -1614,7 +1635,7 @@ function overrideChassi() {
   var data = getStorage(); var v = data.vehicles.find(function (x) { return x.id === currentVehicleId; }); if (!v) return;
   v.chassiVerificado = true; v.chassiOverride = true;
   v.history = v.history || [];
-  v.history.push({ ts: new Date().toISOString(), action: '⚠️ Liberação MANUAL do chassi (exceção)', user: currentUserName || currentProfile });
+  v.history.push({ ts: new Date().toISOString(), action: 'Liberação MANUAL do chassi (exceção)', user: currentUserName || currentProfile });
   setStorage(data); renderDetailTab(currentDetailTab); toast('Liberado manualmente (exceção registrada)');
 }
 function renderDetailInfo(v) {
@@ -1625,22 +1646,22 @@ function renderDetailInfo(v) {
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
         <div><div class="form-label">Modelo</div><div style="font-weight:700">${v.model}${v.versao?` <span style="font-weight:400;color:var(--text-light)">(${v.versao})</span>`:''}</div></div>
         <div><div class="form-label">Cor</div><div>${v.color||'—'}</div></div>
-        <div><div class="form-label">Chassi</div><div style="font-weight:700;font-family:ui-monospace,monospace;font-size:12.5px">${v.chassi||'—'} ${v.chassi?(v.chassiVerificado?`<span title="Conferido por foto" style="color:var(--green)">✓</span>`:`<span title="Não conferido" style="color:var(--yellow)">⚠</span>`):''}</div></div>
+        <div><div class="form-label">Chassi</div><div style="font-weight:700;font-family:ui-monospace,monospace;font-size:12.5px">${v.chassi||'—'} ${v.chassi?(v.chassiVerificado?`<span title="Conferido por foto" style="color:var(--green)">✓</span>`:`<span title="Não conferido" style="color:var(--yellow)"></span>`):''}</div></div>
         <div><div class="form-label">Placa</div><div>${v.plate||'—'}</div></div>
         <div><div class="form-label">Cliente</div><div style="font-weight:700">${v.client}</div></div>
         <div><div class="form-label">Celular</div><div>${v.phone||'—'}</div></div>
         <div><div class="form-label">Consultor</div><div>${v.seller||'—'}</div></div>
         <div><div class="form-label">Nº Fatura</div><div>${v.invoice||'—'}</div></div>
         <div><div class="form-label">Data Fatura</div><div>${formatDate(v.invoiceDate)}</div></div>
-        ${v.entregador?`<div><div class="form-label">Entregador</div><div>🚗 ${v.entregador}</div></div>`:''}
+        ${v.entregador?`<div><div class="form-label">Entregador</div><div>${v.entregador}</div></div>`:''}
         ${(v.deliveryDate||v.horarioEntrega)?`<div><div class="form-label">Entrega</div><div style="font-weight:700;color:var(--green)">${v.deliveryDate?formatDate(v.deliveryDate):''}${v.horarioEntrega?' · '+v.horarioEntrega:''}</div></div>`:''}
-        ${v.viaRapida?`<div><div class="form-label">Fluxo</div><div style="font-weight:700;color:var(--blue)">⚡ Via Rápida (Frota/Locadora)</div></div>`:''}
-        ${v.reagendado?`<div><div class="form-label">Reagendamento</div><div style="font-weight:700;color:var(--red)">🔁 Reagendado</div></div>`:''}
+        ${v.viaRapida?`<div><div class="form-label">Fluxo</div><div style="font-weight:700;color:var(--blue)">Via Rápida (Frota/Locadora)</div></div>`:''}
+        ${v.reagendado?`<div><div class="form-label">Reagendamento</div><div style="font-weight:700;color:var(--red)">Reagendado</div></div>`:''}
       </div>
       ${v.obs?`<div><div class="form-label">Observações</div><div style="font-size:13px;color:#374151">${v.obs}</div></div>`:''}
     </div>
     <div class="card">
-      <div class="card-title" style="margin-bottom:12px">⏱️ Status — ${daysTotal} dia(s) em preparação</div>
+      <div class="card-title" style="margin-bottom:12px">Status — ${daysTotal} dia(s) em preparação</div>
       <div class="timeline">
         ${STAGES.map((s,i) => `
           <div class="timeline-item">
@@ -1656,7 +1677,7 @@ function renderDetailInfo(v) {
     </div>
     ${v.stage < 4 ? `
     <div style="display:flex;flex-direction:column;gap:8px;margin-top:4px">
-      <button class="btn btn-secondary btn-sm" onclick="toggleViaRapida()" style="align-self:flex-start">${v.viaRapida?'⚡ Via Rápida LIGADA (Frota/Locadora)':'⚡ Marcar Via Rápida (Frota/Locadora)'}</button>
+      <button class="btn btn-secondary btn-sm" onclick="toggleViaRapida()" style="align-self:flex-start">${v.viaRapida?'Via Rápida LIGADA (Frota/Locadora)':'Marcar Via Rápida (Frota/Locadora)'}</button>
       <div class="form-group" style="margin-bottom:0">
         <label class="form-label">Responsável pela etapa (${STAGES[v.stage].resp})</label>
         <div style="display:flex;gap:8px">
@@ -1664,7 +1685,7 @@ function renderDetailInfo(v) {
           <button class="btn btn-primary btn-sm" onclick="setAssignee()">Salvar</button>
         </div>
       </div>
-      ${v.commPendente!=null ? `<button class="btn btn-block" onclick="comunicarConclusao()" style="background:var(--yellow-bg);color:var(--yellow);font-weight:700;border:1px solid var(--yellow)">📲 Comunicar conclusão: ${_stageName(v.commPendente)}</button>` : `<button class="btn btn-secondary btn-block" onclick="comunicarConclusao()">📲 Comunicar status (Equipe · Vendedor · Gerência · Torre)</button>`}
+      ${v.commPendente!=null ? `<button class="btn btn-block" onclick="comunicarConclusao()" style="background:var(--yellow-bg);color:var(--yellow);font-weight:700;border:1px solid var(--yellow)">Comunicar conclusão: ${_stageName(v.commPendente)}</button>` : `<button class="btn btn-secondary btn-block" onclick="comunicarConclusao()">Comunicar status (Equipe · Vendedor · Gerência · Torre)</button>`}
       ${v.stage < 2 ? `
         <div class="form-group" id="delivDateGroup" style="margin-bottom:0">
           <label class="form-label">Agendar Data de Entrega</label>
@@ -1675,16 +1696,16 @@ function renderDetailInfo(v) {
         </div>
       ` : ''}
       ${(v.stage===0 && !v.chassiVerificado) ? `
-        <div class="card" style="background:var(--yellow-bg);padding:12px;font-size:13px;margin:0">⚠️ <b>Liberação bloqueada.</b> Registre a <b>foto do adesivo GM (VIN SERIAL)</b> na aba 📷 Fotos: a leitura precisa <b>conferir</b> com a grade para liberar a preparação.${(v.chassiOCR&&!v.chassiOCR.ok)?`<br>Última leitura: <b>${v.chassiOCR.lido||'—'}</b> · Grade (VIN SERIAL): <b>${v.chassiOCR.esperado}</b>`:''}</div>
+        <div class="card" style="background:var(--yellow-bg);padding:12px;font-size:13px;margin:0"><b>Liberação bloqueada.</b> Registre a <b>foto do adesivo GM (VIN SERIAL)</b> na aba Fotos: a leitura precisa <b>conferir</b> com a grade para liberar a preparação.${(v.chassiOCR&&!v.chassiOCR.ok)?`<br>Última leitura: <b>${v.chassiOCR.lido||'—'}</b> · Grade (VIN SERIAL): <b>${v.chassiOCR.esperado}</b>`:''}</div>
         <button class="btn btn-secondary btn-block" onclick="overrideChassi()">Liberar manualmente (exceção)</button>
       ` : `
         <button class="btn btn-success btn-block" onclick="advanceStage()">
           ✓ Concluir: ${STAGES[v.stage].name} → ${STAGES[v.stage+1].name}
         </button>
       `}
-      ${v.stage >= 1 ? `<button class="btn btn-secondary btn-block" onclick="reagendar()">🔁 Reagendamento (cliente não compareceu)</button>` : ''}
+      ${v.stage >= 1 ? `<button class="btn btn-secondary btn-block" onclick="reagendar()">Reagendamento (cliente não compareceu)</button>` : ''}
       ${v.stage > 0 ? `<button class="btn btn-secondary btn-block" onclick="revertStage()">‹ Voltar: ${STAGES[v.stage-1].name}</button>` : ''}
-    </div>` : `<div class="card" style="background:var(--green-bg);text-align:center;padding:20px"><div style="font-size:28px">🎉</div><div style="font-weight:700;color:var(--green);margin-top:8px">Entregue!</div><div style="font-size:13px;color:#166534;margin-top:4px">Entregue em ${formatDate(v.deliveryDate)}</div></div>`}
+    </div>` : `<div class="card" style="background:var(--green-bg);text-align:center;padding:20px"><div style="font-size:28px"></div><div style="font-weight:700;color:var(--green);margin-top:8px">Entregue!</div><div style="font-size:13px;color:#35D399;margin-top:4px">Entregue em ${formatDate(v.deliveryDate)}</div></div>`}
   `;
 }
 function saveDeliveryDate() {
@@ -1702,7 +1723,7 @@ function advanceStage() {
   const v = data.vehicles.find(v => v.id === currentVehicleId);
   if(!v || v.stage >= 4) return;
   if(v.stage === 0 && !v.chassiVerificado) {   // só libera a preparação com o chassi conferido
-    toast('⚠️ Confira o chassi pela foto antes de liberar a preparação');
+    toast('Confira o chassi pela foto antes de liberar a preparação');
     return;
   }
   const tpl = CHECKLIST_TEMPLATES.find(t => t.stage === v.stage);
@@ -1715,15 +1736,15 @@ function advanceStage() {
   }
   const etapaConcluida = v.stage;
   v.stage++;
-  v.commPendente = etapaConcluida;   // 📲 comunicação obrigatória da etapa concluída (v5.1)
+  v.commPendente = etapaConcluida;   // comunicação obrigatória da etapa concluída (v5.1)
   v.assignee = '';                    // nova etapa: reatribuir responsável
   v.history = v.history || [];
   v.history.push({ ts: new Date().toISOString(), action: `Avançou para: ${STAGES[v.stage].name}`, user: currentUserName || currentProfile });
   setStorage(data);
   openDetail(currentVehicleId);
-  toast(`Avançado para: ${STAGES[v.stage].name} — 📲 comunique a conclusão`);
+  toast(`Avançado para: ${STAGES[v.stage].name} — comunique a conclusão`);
 }
-// 👤 Atribuição de tarefas: quem é o responsável pela etapa atual.
+// Atribuição de tarefas: quem é o responsável pela etapa atual.
 function setAssignee() {
   const val = (document.getElementById('assigneeInput')||{}).value || '';
   const data = getStorage();
@@ -1732,27 +1753,27 @@ function setAssignee() {
   const before = v.assignee || '';
   v.assignee = val.trim();
   v.history = v.history || [];
-  v.history.push({ ts: new Date().toISOString(), action: v.assignee ? ('👤 Responsável: ' + v.assignee + (before?(' (era '+before+')'):'')) : 'Responsável removido', user: currentUserName || currentProfile });
+  v.history.push({ ts: new Date().toISOString(), action: v.assignee ? ('Responsável: ' + v.assignee + (before?(' (era '+before+')'):'')) : 'Responsável removido', user: currentUserName || currentProfile });
   setStorage(data);
   openDetail(currentVehicleId);
   toast(v.assignee ? ('Responsável: ' + v.assignee) : 'Responsável removido');
 }
-// 📲 Comunicação obrigatória: monta a mensagem e compartilha/copia (WhatsApp).
+// Comunicação obrigatória: monta a mensagem e compartilha/copia (WhatsApp).
 function buildCommMessage(v) {
   const concl = (v.commPendente!=null) ? _stageName(v.commPendente) : null;
   const prox = (v.stage < STAGES.length-1) ? _stageName(v.stage) : 'Entregue';
   const linhas = [
-    '🚗 Braga Veículos — ' + (v.model||'') + (v.color?(' · '+v.color):''),
+    'GAE — ' + (v.model||'') + (v.color?(' · '+v.color):''),
     'Cliente: ' + (v.client||'—'),
     'Chassi/VIN SERIAL: ' + (v.chassi||'—')
   ];
-  if(concl) linhas.push('✅ Etapa concluída: ' + concl);
-  linhas.push('➡️ Etapa atual: ' + prox);
-  if(v.assignee) linhas.push('👤 Responsável: ' + v.assignee);
-  if(v.deliveryDate || v.horarioEntrega) linhas.push('🗓️ Entrega: ' + (v.deliveryDate?formatDate(v.deliveryDate):'') + (v.horarioEntrega?(' '+v.horarioEntrega):''));
-  if(v.viaRapida) linhas.push('⚡ Via Rápida (Frota/Locadora)');
-  if(v.reagendado) linhas.push('🔁 Reagendado');
-  linhas.push('📣 Comunicar: Equipe · Vendedor · Gerência · Torre de Controle');
+  if(concl) linhas.push('Etapa concluída: ' + concl);
+  linhas.push('Etapa atual: ' + prox);
+  if(v.assignee) linhas.push('Responsável: ' + v.assignee);
+  if(v.deliveryDate || v.horarioEntrega) linhas.push('Entrega: ' + (v.deliveryDate?formatDate(v.deliveryDate):'') + (v.horarioEntrega?(' '+v.horarioEntrega):''));
+  if(v.viaRapida) linhas.push('Via Rápida (Frota/Locadora)');
+  if(v.reagendado) linhas.push('Reagendado');
+  linhas.push('Comunicar: Equipe · Vendedor · Gerência · Torre de Controle');
   return linhas.join('\n');
 }
 function comunicarConclusao() {
@@ -1767,16 +1788,16 @@ function comunicarConclusao() {
     vv.comunicados[etapa] = new Date().toISOString();
     vv.commPendente = null;   // pendência resolvida
     vv.history = vv.history || [];
-    vv.history.push({ ts: new Date().toISOString(), action: '📲 Comunicado (' + via + ') — ' + _stageName(etapa), user: currentUserName || currentProfile });
+    vv.history.push({ ts: new Date().toISOString(), action: 'Comunicado (' + via + ') — ' + _stageName(etapa), user: currentUserName || currentProfile });
     setStorage(d);
     openDetail(currentVehicleId);
-    toast('📲 Comunicação registrada');
+    toast('Comunicação registrada');
   };
   if(navigator.share){
-    navigator.share({ title:'Braga Veículos', text:msg }).then(function(){ registrar('compartilhado'); })
+    navigator.share({ title:'GAE', text:msg }).then(function(){ registrar('compartilhado'); })
       .catch(function(){ /* usuário cancelou: não registra */ });
   } else if(navigator.clipboard && navigator.clipboard.writeText){
-    navigator.clipboard.writeText(msg).then(function(){ registrar('copiado'); toast('📋 Mensagem copiada — cole no WhatsApp'); })
+    navigator.clipboard.writeText(msg).then(function(){ registrar('copiado'); toast('Mensagem copiada — cole no WhatsApp'); })
       .catch(function(){ alert(msg); registrar('exibido'); });
   } else {
     alert(msg); registrar('exibido');
@@ -1799,10 +1820,10 @@ function toggleViaRapida() {
   if(!v) return;
   v.viaRapida = !v.viaRapida;
   v.history = v.history || [];
-  v.history.push({ ts: new Date().toISOString(), action: v.viaRapida ? '⚡ Marcado como Via Rápida (Frota/Locadora)' : 'Via Rápida desativada', user: currentUserName || currentProfile });
+  v.history.push({ ts: new Date().toISOString(), action: v.viaRapida ? 'Marcado como Via Rápida (Frota/Locadora)' : 'Via Rápida desativada', user: currentUserName || currentProfile });
   setStorage(data);
   openDetail(currentVehicleId);
-  toast(v.viaRapida ? '⚡ Via Rápida ligada — prioridade' : 'Via Rápida desligada');
+  toast(v.viaRapida ? 'Via Rápida ligada — prioridade' : 'Via Rápida desligada');
 }
 // Reagendamento: cliente não compareceu — volta o veículo p/ Pré-Entrega e pede nova data.
 function reagendar() {
@@ -1817,15 +1838,15 @@ function reagendar() {
   v.reagendado = true;
   if(nova.trim()) v.deliveryDate = nova.trim(); else v.deliveryDate = '';
   v.history = v.history || [];
-  v.history.push({ ts: new Date().toISOString(), action: '🔁 Reagendado' + (motivo.trim() ? ' — ' + motivo.trim() : '') + (nova.trim() ? ' · nova data ' + nova.trim() : ' · data a definir'), user: currentUserName || currentProfile });
+  v.history.push({ ts: new Date().toISOString(), action: 'Reagendado' + (motivo.trim() ? ' — ' + motivo.trim() : '') + (nova.trim() ? ' · nova data ' + nova.trim() : ' · data a definir'), user: currentUserName || currentProfile });
   setStorage(data);
   openDetail(currentVehicleId);
-  toast('🔁 Veículo reagendado (Pré-Entrega)');
+  toast('Veículo reagendado (Pré-Entrega)');
 }
 function renderDetailChecklist(v) {
   const el = document.getElementById('detailTabChecklist');
   const tpl = CHECKLIST_TEMPLATES.find(t => t.stage === v.stage);
-  if(!tpl) { el.innerHTML = '<div class="empty"><div class="empty-icon">✅</div><div class="empty-text">Checklist concluído para etapas anteriores</div></div>'; return; }
+  if(!tpl) { el.innerHTML = '<div class="empty"><div class="empty-icon"></div><div class="empty-text">Checklist concluído para etapas anteriores</div></div>'; return; }
   const checks = (v.checklists && v.checklists[v.stage]) || tpl.items.map(()=>false);
   const done = checks.filter(Boolean).length;
   el.innerHTML = `
@@ -1864,7 +1885,7 @@ function renderDetailAccessories(v, data) {
   const el = document.getElementById('detailTabAccessories');
   if(!v.accessories || v.accessories.length === 0) {
     el.innerHTML = `
-      <div class="empty"><div class="empty-icon">🛠️</div><div class="empty-text">Nenhum acessório cadastrado</div></div>
+      <div class="empty"><div class="empty-icon"></div><div class="empty-text">Nenhum acessório cadastrado</div></div>
       <button class="btn btn-primary btn-block" style="margin-top:12px" onclick="openAddAccModal()">+ Adicionar Acessório</button>
     `;
     return;
@@ -1885,7 +1906,7 @@ function renderDetailAccessories(v, data) {
           ${acc.code?`<div class="acc-detail">Código: ${acc.code}</div>`:''}
           ${acc.installedAt?`<div class="acc-detail">Instalado em: ${formatDate(acc.installedAt)}</div>`:''}
         </div>
-        ${acc.installed?'<span style="font-size:18px">✅</span>':'<span style="font-size:18px;color:#d1d5db">⬜</span>'}
+        ${acc.installed?'<span style="font-size:18px"></span>':'<span style="font-size:18px;color:#3c404a"></span>'}
       </div>
     `).join('')}
   `;
@@ -1902,7 +1923,7 @@ function toggleAcc(idx) {
 function renderDetailHistory(v) {
   const el = document.getElementById('detailTabHistory');
   const hist = v.history || [];
-  if(hist.length === 0) { el.innerHTML = '<div class="empty"><div class="empty-icon">📋</div><div class="empty-text">Sem histórico ainda</div></div>'; return; }
+  if(hist.length === 0) { el.innerHTML = '<div class="empty"><div class="empty-icon"></div><div class="empty-text">Sem histórico ainda</div></div>'; return; }
   el.innerHTML = `
     <div class="card">
       <div class="timeline">
@@ -1925,7 +1946,7 @@ function renderChecklistVehicles() {
   const data = getStorage();
   const active = data.vehicles.filter(v => v.stage < 4);
   const el = document.getElementById('checklistVehicles');
-  if(active.length === 0) { el.innerHTML = '<div class="empty"><div class="empty-icon">✅</div><div class="empty-text">Nenhum veículo em preparação</div></div>'; return; }
+  if(active.length === 0) { el.innerHTML = '<div class="empty"><div class="empty-icon"></div><div class="empty-text">Nenhum veículo em preparação</div></div>'; return; }
   el.innerHTML = active.map(v => {
     const tpl = CHECKLIST_TEMPLATES.find(t => t.stage === v.stage);
     const checks = (v.checklists && v.checklists[v.stage]) || [];
@@ -1956,21 +1977,21 @@ function openDetailChecklist(id) {
 function renderDefects() {
   const data = getStorage();
   const el = document.getElementById('defectsList');
-  if(data.defects.length === 0) { el.innerHTML = '<div class="empty"><div class="empty-icon">✅</div><div class="empty-text">Nenhum defeito registrado</div></div>'; return; }
+  if(data.defects.length === 0) { el.innerHTML = '<div class="empty"><div class="empty-icon"></div><div class="empty-text">Nenhum defeito registrado</div></div>'; return; }
   el.innerHTML = [...data.defects].reverse().map(d => `
     <div class="defect-card ${d.resolved?'resolved':''}">
       <div style="display:flex;justify-content:space-between;align-items:flex-start">
         <div>
           <div style="font-weight:700;font-size:14px">${d.vehicleName}</div>
-          <div style="font-size:12px;color:#6b7280;margin-top:2px">${d.type} · ${d.location}</div>
+          <div style="font-size:12px;color:#9aa0ab;margin-top:2px">${d.type} · ${d.location}</div>
         </div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
-          <span class="badge badge-${d.severity==='alta'?'red':d.severity==='media'?'yellow':'green'}">${d.severity==='alta'?'🔴 Alta':d.severity==='media'?'🟡 Média':'🟢 Baixa'}</span>
+          <span class="badge badge-${d.severity==='alta'?'red':d.severity==='media'?'yellow':'green'}">${d.severity==='alta'?'Alta':d.severity==='media'?'Média':'Baixa'}</span>
           ${!d.resolved?`<button class="btn btn-success btn-sm" onclick="resolveDefect(${d.id})">Resolver</button>`:`<span class="badge badge-green">Resolvido</span>`}
         </div>
       </div>
       <div style="margin-top:8px;font-size:13px">${d.desc}</div>
-      <div style="margin-top:6px;font-size:11px;color:#9ca3af">${d.inspector} · ${formatDate(d.date)}</div>
+      <div style="margin-top:6px;font-size:11px;color:#9aa0ab">${d.inspector} · ${formatDate(d.date)}</div>
     </div>
   `).join('');
 }
@@ -2027,13 +2048,13 @@ function addAccessory() {
   input.value = '';
   document.getElementById('accList').innerHTML = pendingAccList.map((a,i) =>
     `<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
-      <span style="flex:1;font-size:13px;background:#f3f4f6;padding:4px 8px;border-radius:6px">${a.name}</span>
-      <button onclick="removeAcc(${i})" style="background:#fee2e2;color:#dc2626;border:none;border-radius:4px;padding:4px 8px;font-size:11px;cursor:pointer">✕</button>
+      <span style="flex:1;font-size:13px;background:#2b2e35;padding:4px 8px;border-radius:6px">${a.name}</span>
+      <button onclick="removeAcc(${i})" style="background:rgba(240,99,94,0.16);color:#F0635E;border:none;border-radius:4px;padding:4px 8px;font-size:11px;cursor:pointer">✕</button>
     </div>`
   ).join('');
 }
 function removeAcc(i) { pendingAccList.splice(i,1); document.getElementById('accList').innerHTML = pendingAccList.map((a,j)=>
-  `<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px"><span style="flex:1;font-size:13px;background:#f3f4f6;padding:4px 8px;border-radius:6px">${a.name}</span><button onclick="removeAcc(${j})" style="background:#fee2e2;color:#dc2626;border:none;border-radius:4px;padding:4px 8px;font-size:11px;cursor:pointer">✕</button></div>`).join(''); }
+  `<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px"><span style="flex:1;font-size:13px;background:#2b2e35;padding:4px 8px;border-radius:6px">${a.name}</span><button onclick="removeAcc(${j})" style="background:rgba(240,99,94,0.16);color:#F0635E;border:none;border-radius:4px;padding:4px 8px;font-size:11px;cursor:pointer">✕</button></div>`).join(''); }
 function saveNewVehicle() {
   const model = document.getElementById('nv_model').value;
   const client = document.getElementById('nv_client').value.trim();
@@ -2118,8 +2139,8 @@ let planilhaTipo = 'preparacao';   // v5.1: 1 Preparação · 2 Entrega · 3 Rea
 const PLANILHA_TIPOS = {
   preparacao:    { label: '1 · Preparação',    hint: 'Fila de preparação: cadastra novos na etapa Preparação e atualiza os existentes.' },
   entrega:       { label: '2 · Entrega',       hint: 'Agenda diária (48h antes): define data/horário/entregador e leva o veículo para a Pré-Entrega.' },
-  reagendamento: { label: '3 · Reagendamento', hint: 'Cliente não compareceu: marca 🔁 Reagendado e volta o veículo para a Pré-Entrega com a nova data.' },
-  entregues:     { label: '4 · Entregues',     hint: 'Confirmação de entrega: marca os veículos como ✅ Entregue.' }
+  reagendamento: { label: '3 · Reagendamento', hint: 'Cliente não compareceu: marca Reagendado e volta o veículo para a Pré-Entrega com a nova data.' },
+  entregues:     { label: '4 · Entregues',     hint: 'Confirmação de entrega: marca os veículos como Entregue.' }
 };
 
 function openIntakePreFilled() {
@@ -2165,10 +2186,10 @@ function selectSource(src) {
   if(src === 'planilha') {
     selectPlanilhaTipo(planilhaTipo);
     ta.placeholder = 'Cole aqui o texto da planilha.\nO app extrai todos os veículos automaticamente pelo chassi.';
-    document.getElementById('btnProcess').textContent = '🔍 Processar planilha (lote)';
+    document.getElementById('btnProcess').textContent = 'Processar planilha (lote)';
   } else {
     ta.placeholder = 'Cole a mensagem do WhatsApp ou e-mail aqui...';
-    document.getElementById('btnProcess').textContent = '🔍 Processar e Extrair Dados';
+    document.getElementById('btnProcess').textContent = 'Processar e Extrair Dados';
   }
   if(src !== 'whatsapp') { intakeSender = null; document.querySelectorAll('.auth-btn').forEach(b => b.classList.remove('selected')); }
   checkIntakeReady();
@@ -2426,7 +2447,7 @@ function applyPlanilhaRows(rows,data,ts,user,tipo){
       var stageChanged = _applyTipoStage(v, tipo, changes, maxStage);
       if(changes.length || stageChanged){
         if(!changes.length) changes.push('Planilha ' + PLANILHA_TIPOS[tipo].label + ' aplicada');
-        v.changed = ts;   // 🔔 tag de alerta (some ao abrir o veículo)
+        v.changed = ts;   // tag de alerta (some ao abrir o veículo)
         v.history=v.history||[]; v.history.push({ts:ts, action:'Planilha ' + PLANILHA_TIPOS[tipo].label + ' — '+changes.join(' · '), user:user});
         alterados++; rel.alterados.push({chassi:v.chassi, cliente:v.client, changes:changes});
       } else { semMudanca++; }
@@ -2499,16 +2520,16 @@ function handlePlanilhaPdf(e){
   if(!file) return;
   if(!/pdf/i.test(file.type||'') && !/\.pdf$/i.test(file.name||'')){ toast('Selecione um arquivo PDF'); return; }
   const st = document.getElementById('planilhaPdfStatus');
-  st.textContent = '⏳ Lendo o PDF...';
+  st.textContent = 'Lendo o PDF...';
   extractPlanilhaFromPdf(file).then(text=>{
     document.getElementById('intakeText').value = text;
     const n = (text.match(/\b[0-9][0-9A-HJ-NPR-Z]{16}\b/g)||[]).length;
-    if(n===0){ st.textContent = '⚠️ Nenhum chassi encontrado no PDF. Confira o arquivo ou cole o texto.'; toast('Não encontrei veículos nesse PDF'); return; }
-    st.textContent = `✅ PDF lido — ${n} veículo(s) encontrado(s).`;
+    if(n===0){ st.textContent = 'Nenhum chassi encontrado no PDF. Confira o arquivo ou cole o texto.'; toast('Não encontrei veículos nesse PDF'); return; }
+    st.textContent = `PDF lido — ${n} veículo(s) encontrado(s).`;
     processPlanilhaIntake();
   }).catch(err=>{
     console.warn('[PDF] falha ao extrair:', err);
-    st.textContent = '⚠️ Não consegui ler este PDF (precisa de internet na 1ª vez). Cole o texto no campo abaixo.';
+    st.textContent = 'Não consegui ler este PDF (precisa de internet na 1ª vez). Cole o texto no campo abaixo.';
     toast('Falha ao ler o PDF — cole o texto manualmente');
   });
   try { e.target.value = ''; } catch(_) {}
@@ -2527,7 +2548,7 @@ function processPlanilhaIntake(){
   setStorage(data);
   renderAll();
   showPlanilhaReport(r, res.date, ignoradas);
-  toast(`✅ ${r.novos} novo(s) · 🔔 ${r.alterados} atualizado(s)`);
+  toast(`${r.novos} novo(s) · ${r.alterados} atualizado(s)`);
 }
 function showPlanilhaReport(r, date, ignoradas){
   const dataBR = date ? date.split('-').reverse().join('/') : null;
@@ -2535,19 +2556,19 @@ function showPlanilhaReport(r, date, ignoradas){
   document.getElementById('bulkSummary').innerHTML =
     `<div class="bulk-sub" style="margin-bottom:8px">Planilha <b>${tipoLabel}</b>${dataBR?` · <b>${dataBR}</b>`:''}</div>
      <div style="display:flex;gap:6px;flex-wrap:wrap">
-       <span class="badge badge-green">✅ ${r.novos} novo(s)</span>
-       <span class="badge badge-yellow">🔔 ${r.alterados} atualizado(s)</span>
+       <span class="badge badge-green">${r.novos} novo(s)</span>
+       <span class="badge badge-yellow">${r.alterados} atualizado(s)</span>
        <span class="badge badge-blue">= ${r.semMudanca} sem mudança</span>
-       ${ignoradas?`<span class="badge badge-red">⚠️ ${ignoradas} sem chassi</span>`:''}
+       ${ignoradas?`<span class="badge badge-red">${ignoradas} sem chassi</span>`:''}
      </div>`;
   let list = '';
   if(r.relatorio.alterados.length){
-    list += `<div style="font-weight:700;font-size:13px;margin:6px 0">🔔 Alterações aplicadas automaticamente</div>`;
+    list += `<div style="font-weight:700;font-size:13px;margin:6px 0">Alterações aplicadas automaticamente</div>`;
     list += r.relatorio.alterados.map(a =>
       `<div class="bulk-row bulk-warn"><div class="bulk-main"><div class="bulk-title">${a.cliente||a.chassi}</div><div class="bulk-sub">${a.changes.join('<br>')}</div></div></div>`).join('');
   }
   if(r.relatorio.novos.length){
-    list += `<div style="font-weight:700;font-size:13px;margin:10px 0 6px">✅ Novos cadastrados (${r.relatorio.novos.length})</div>`;
+    list += `<div style="font-weight:700;font-size:13px;margin:10px 0 6px">Novos cadastrados (${r.relatorio.novos.length})</div>`;
     list += `<div class="bulk-sub">${r.relatorio.novos.map(n=>n.cliente||n.chassi).join(' · ')}</div>`;
   }
   document.getElementById('bulkList').innerHTML = list;
@@ -2589,7 +2610,7 @@ function processIntake() {
   document.getElementById('confLabel').textContent = `Confiança: ${conf}% — ${conf>70?'Alta — verifique e confirme':'Média/Baixa — preencha os campos faltantes'}`;
 
   // Parsed preview
-  const srcLabels = {email:'📧 E-mail', whatsapp:`💬 WhatsApp (${intakeSender})`, pdf:'📄 PDF', image:'🖼️ Imagem'};
+  const srcLabels = {email:'E-mail', whatsapp:`WhatsApp (${intakeSender})`, pdf:'PDF', image:'Imagem'};
   document.getElementById('parsedPreview').innerHTML = `
     <div class="parsed-field"><span class="parsed-key">Origem</span><span class="parsed-val">${srcLabels[intakeSource]}</span></div>
     ${parsed.model?`<div class="parsed-field"><span class="parsed-key">Modelo</span><span class="parsed-val" style="font-weight:700">${parsed.model}</span></div>`:''}
@@ -2625,8 +2646,8 @@ function openAddAccModal() {
 function renderParsedAccs() {
   document.getElementById('p_accList').innerHTML = parsedAccs.map((a,i)=>
     `<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
-      <span style="flex:1;font-size:13px;background:#f3f4f6;padding:4px 8px;border-radius:6px">${a.name}</span>
-      <button onclick="removeParsedAcc(${i})" style="background:#fee2e2;color:#dc2626;border:none;border-radius:4px;padding:4px 8px;font-size:11px;cursor:pointer">✕</button>
+      <span style="flex:1;font-size:13px;background:#2b2e35;padding:4px 8px;border-radius:6px">${a.name}</span>
+      <button onclick="removeParsedAcc(${i})" style="background:rgba(240,99,94,0.16);color:#F0635E;border:none;border-radius:4px;padding:4px 8px;font-size:11px;cursor:pointer">✕</button>
     </div>`
   ).join('');
 }
@@ -2675,7 +2696,7 @@ function confirmIntake() {
   setStorage(data);
   closeModal('intakeModal');
   renderAll();
-  toast(`✅ ${model} de ${client} cadastrado!`);
+  toast(`${model} de ${client} cadastrado!`);
 }
 
 // ===== RENDER INTAKE LIST =====
@@ -2685,10 +2706,10 @@ function renderIntakeList() {
   const el = document.getElementById('intakeList');
   if(!el) return;
   if(intakes.length === 0) {
-    el.innerHTML = `<div class="empty"><div class="empty-icon">📥</div><div class="empty-text">Nenhuma entrada registrada ainda.<br>Toque em "+ Nova Entrada" para registrar um pedido.</div></div>`;
+    el.innerHTML = `<div class="empty"><div class="empty-icon"></div><div class="empty-text">Nenhuma entrada registrada ainda.<br>Toque em "+ Nova Entrada" para registrar um pedido.</div></div>`;
     return;
   }
-  const srcIcons = {email:'📧',whatsapp:'💬',pdf:'📄',image:'🖼️'};
+  const srcIcons = {email:'',whatsapp:'',pdf:'',image:''};
   el.innerHTML = [...intakes].reverse().map(it => {
     const v = data.vehicles.find(v=>v.id===it.vehicleId);
     const stage = v ? STAGES[v.stage].name : 'Entregue';
@@ -2696,8 +2717,8 @@ function renderIntakeList() {
       <div class="intake-card processed" onclick="${v?'openDetail('+it.vehicleId+')':''}">
         <div style="display:flex;justify-content:space-between;align-items:flex-start">
           <div>
-            <div style="font-weight:700;font-size:14px">${srcIcons[it.source]||'📥'} ${it.vehicleName}</div>
-            <div style="font-size:12px;color:#6b7280;margin-top:2px">
+            <div style="font-weight:700;font-size:14px">${srcIcons[it.source]||''} ${it.vehicleName}</div>
+            <div style="font-size:12px;color:#9aa0ab;margin-top:2px">
               ${it.source.toUpperCase()}${it.sender?' · '+it.sender:''} · ${formatDateTime(it.ts)}
             </div>
           </div>
@@ -2712,14 +2733,14 @@ function renderIntakeList() {
 // As chaves do Firebase já vêm embutidas (firebase-config.js), então não há
 // tela de configuração no app — aqui ficam só os rótulos de status.
 function cloudStatusLabel(s){
-  var map={ online:['🟢','Sincronizado','var(--green)'], conectando:['🟡','Conectando…','var(--yellow)'],
-            erro:['🔴','Sem conexão com a nuvem','var(--red)'], desligado:['⚪','Local (sem nuvem)','var(--text-light)'] };
+  var map={ online:['','Sincronizado','var(--green)'], conectando:['','Conectando…','var(--yellow)'],
+            erro:['','Sem conexão com a nuvem','var(--red)'], desligado:['','Local (sem nuvem)','var(--text-light)'] };
   var m=map[s]||map.desligado;
   return '<span style="color:'+m[2]+';font-weight:700">'+m[0]+' '+m[1]+'</span>';
 }
 function updateCloudChip(s){
   var chip=document.getElementById('cloudChip');
-  if(chip){ var map={online:'🟢 Nuvem',conectando:'🟡 …',erro:'🔴 Offline',desligado:'☁️ Local'}; chip.textContent=map[s]||map.desligado; }
+  if(chip){ var map={online:'Nuvem',conectando:'…',erro:'Offline',desligado:'Local'}; chip.textContent=map[s]||map.desligado; }
   var ls=document.getElementById('cloudLoginStatus'); if(ls) ls.innerHTML=cloudStatusLabel(s);
 }
 
