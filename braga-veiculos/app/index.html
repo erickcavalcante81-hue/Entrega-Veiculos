@@ -448,6 +448,8 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
 .header-title,.section-title,.card-title,.vehicle-model,.login-logo h1,.modal-title,.detail-header h2,.pipeline-stage-title{font-family:'Archivo Narrow',sans-serif;font-style:italic;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;}
 .header{border-bottom:3px solid;border-image:linear-gradient(90deg,#E9D24B,#9FD84F,#35D399) 1;}
 .header-logo{display:flex;align-items:center;gap:10px;}
+.profile-icon{color:#16171b;}
+.profile-icon svg{display:block;}
 .btn{border-radius:100px;}
 .btn-primary{background:linear-gradient(90deg,#E9D24B,#9FD84F);color:#16171b;font-weight:800;}
 .btn-primary:hover{background:linear-gradient(90deg,#E0C63F,#8fce45);}
@@ -472,39 +474,39 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
   <div style="width:100%;max-width:380px">
     <p style="color:#9aa0ab;font-size:13px;text-align:center;margin-bottom:16px">Selecione seu perfil para continuar</p>
     <button class="profile-option" onclick="login('gerente', 'Gerente')">
-      <div class="profile-icon">📊</div>
+      <div class="profile-icon"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg></div>
       <div><div class="profile-name">Gerente / Dashboard</div><div class="profile-desc">Visão geral, métricas e alertas</div></div>
     </button>
     <button class="profile-option" onclick="login('torre', 'Torre de Controle')">
-      <div class="profile-icon">🗼</div>
+      <div class="profile-icon"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2"/><path d="M16.24 7.76a6 6 0 0 1 0 8.49"/><path d="M7.76 16.24a6 6 0 0 1 0-8.49"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M4.93 19.07a10 10 0 0 1 0-14.14"/></svg></div>
       <div><div class="profile-name">Torre de Controle</div><div class="profile-desc">Monitora todo o fluxo, comunicação e atribuição de tarefas</div></div>
     </button>
     <button class="profile-option" onclick="login('programador', 'Programador')">
-      <div class="profile-icon">📋</div>
+      <div class="profile-icon"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg></div>
       <div><div class="profile-name">Programador</div><div class="profile-desc">Entrada das 4 planilhas, pipeline e agendamentos</div></div>
     </button>
     <button class="profile-option" onclick="login('programador', 'Co-Programador')">
-      <div class="profile-icon">👨‍💼</div>
+      <div class="profile-icon"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg></div>
       <div><div class="profile-name">Co-Programador</div><div class="profile-desc">Recebe pedidos, cadastra veículos e atualiza listas</div></div>
     </button>
     <button class="profile-option" onclick="login('preparador', 'Colaborador Pátio')">
-      <div class="profile-icon">🔧</div>
+      <div class="profile-icon"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-.6-.6-2.4z"/></svg></div>
       <div><div class="profile-name">Colaborador de Pátio</div><div class="profile-desc">Busca o veículo, foto do VIN SERIAL e preparação (etapa 1)</div></div>
     </button>
     <button class="profile-option" onclick="login('instalador', 'Instalação de Acessórios')">
-      <div class="profile-icon">🛠️</div>
+      <div class="profile-icon"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></div>
       <div><div class="profile-name">Instalação de Acessórios</div><div class="profile-desc">Instala e confirma acessórios e películas (na preparação)</div></div>
     </button>
     <button class="profile-option" onclick="login('lavador', 'Lavador / Tapete')">
-      <div class="profile-icon">✨</div>
+      <div class="profile-icon"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.7s6 5.7 6 10.3a6 6 0 0 1-12 0c0-4.6 6-10.3 6-10.3z"/></svg></div>
       <div><div class="profile-name">Lavador / Tapete</div><div class="profile-desc">Lavagem, acabamento e tapete de fábrica — inclui veículos sem acessório</div></div>
     </button>
     <button class="profile-option" onclick="login('tecnico', 'Equipe Técnica')">
-      <div class="profile-icon">🏁</div>
+      <div class="profile-icon"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><path d="M4 22V4"/></svg></div>
       <div><div class="profile-name">Equipe Técnica</div><div class="profile-desc">Conferência final, placa e validação (etapa 3)</div></div>
     </button>
     <button class="profile-option" onclick="login('entregador', 'Entregador Técnico')">
-      <div class="profile-icon">🚗</div>
+      <div class="profile-icon"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l1.5-4.5A2 2 0 0 1 8.4 7h7.2a2 2 0 0 1 1.9 1.3L19 13"/><path d="M3 13h18v4a1 1 0 0 1-1 1h-1"/><circle cx="7.5" cy="17.5" r="1.5"/><circle cx="16.5" cy="17.5" r="1.5"/></svg></div>
       <div><div class="profile-name">Entregador Técnico</div><div class="profile-desc">Entrega ao cliente, fotos finais e Planilha 4 (etapa 4)</div></div>
     </button>
     <div style="margin-top:18px;text-align:center;border-top:1px solid var(--border);padding-top:14px">
@@ -527,7 +529,7 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
     </div>
   </div>
   <div style="display:flex;align-items:center;gap:8px">
-    <div id="cloudChip" title="Status da sincronização em nuvem" style="font-size:12px;font-weight:700;padding:6px 10px;border-radius:16px;background:var(--card);color:var(--text-light)">☁️ Local</div>
+    <div id="cloudChip" title="Status da sincronização em nuvem" style="font-size:12px;font-weight:700;padding:6px 10px;border-radius:16px;background:var(--card);color:var(--text-light)">Local</div>
     <div class="profile-badge" onclick="logout()" id="profileBadge">—</div>
   </div>
 </div>
@@ -545,12 +547,12 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
     </div>
 
     <div class="card" id="torreCard" style="margin-bottom:10px;display:none">
-      <div class="card-header"><div class="card-title">🗼 Torre de Controle — Pendências</div></div>
+      <div class="card-header"><div class="card-title">Torre de Controle — Pendências</div></div>
       <div id="dashTorre"></div>
     </div>
 
     <div class="card" style="margin-bottom:10px">
-      <div class="card-header"><div class="card-title">📅 Entregas Hoje</div></div>
+      <div class="card-header"><div class="card-title">Entregas Hoje</div></div>
       <div id="dashToday"></div>
     </div>
 
@@ -568,11 +570,11 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
     </div>
     <div class="status-bar" id="stageFilter">
       <div class="status-chip active" data-stage="all" onclick="filterStage('all',this)">Todos</div>
-      <div class="status-chip" data-stage="0" onclick="filterStage('0',this)">🔧 Preparação</div>
-      <div class="status-chip" data-stage="1" onclick="filterStage('1',this)">📄 Pré-Entrega</div>
-      <div class="status-chip" data-stage="2" onclick="filterStage('2',this)">🏁 Conf. Final</div>
-      <div class="status-chip" data-stage="3" onclick="filterStage('3',this)">🚗 Entrega</div>
-      <div class="status-chip" data-stage="4" onclick="filterStage('4',this)">✅ Entregue</div>
+      <div class="status-chip" data-stage="0" onclick="filterStage('0',this)">Preparação</div>
+      <div class="status-chip" data-stage="1" onclick="filterStage('1',this)">Pré-Entrega</div>
+      <div class="status-chip" data-stage="2" onclick="filterStage('2',this)">Conf. Final</div>
+      <div class="status-chip" data-stage="3" onclick="filterStage('3',this)">Entrega</div>
+      <div class="status-chip" data-stage="4" onclick="filterStage('4',this)">Entregue</div>
     </div>
     <div id="vehiclesList"></div>
   </div>
@@ -590,11 +592,11 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
     <div id="entradaQuickActions" style="display:none;margin-bottom:14px">
       <div style="font-size:13px;font-weight:700;color:var(--text-light);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px">Ação Rápida</div>
       <button class="btn btn-success btn-block" onclick="openIntakePreFilled()" style="font-size:15px;padding:16px">
-        💬 Recebi mensagem do Programador — Cadastrar Veículo
+        Recebi mensagem do Programador — Cadastrar Veículo
       </button>
     </div>
     <div class="section-header">
-      <div class="section-title">📥 Entradas Recebidas</div>
+      <div class="section-title">Entradas Recebidas</div>
       <button class="btn btn-primary btn-sm" onclick="openIntakeModal()">+ Nova Entrada</button>
     </div>
     <div id="intakeList"></div>
@@ -761,9 +763,9 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
       <div class="form-group">
         <label class="form-label">Severidade</label>
         <select class="form-control" id="def_severity">
-          <option value="alta">🔴 Alta</option>
-          <option value="media">🟡 Média</option>
-          <option value="baixa">🟢 Baixa</option>
+          <option value="alta">Alta</option>
+          <option value="media">Média</option>
+          <option value="baixa">Baixa</option>
         </select>
       </div>
     </div>
@@ -784,7 +786,7 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
   <div class="detail-body">
     <div class="detail-tabs">
       <button class="detail-tab active" onclick="showDetailTab('info',this)">Geral</button>
-      <button class="detail-tab" onclick="showDetailTab('fotos',this)">📷 Fotos</button>
+      <button class="detail-tab" onclick="showDetailTab('fotos',this)">Fotos</button>
       <button class="detail-tab" onclick="showDetailTab('checklist',this)">Checklist</button>
       <button class="detail-tab" onclick="showDetailTab('accessories',this)">Acessórios</button>
       <button class="detail-tab" onclick="showDetailTab('history',this)">Histórico</button>
@@ -810,19 +812,19 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
       <div class="form-label" style="margin-bottom:8px">Origem do pedido</div>
       <div class="source-grid">
         <button class="source-btn" id="src_email" onclick="selectSource('email')">
-          <span class="src-icon">📧</span><span>E-mail</span>
+          <span class="src-icon"></span><span>E-mail</span>
         </button>
         <button class="source-btn" id="src_whatsapp" onclick="selectSource('whatsapp')">
-          <span class="src-icon">💬</span><span>WhatsApp</span>
+          <span class="src-icon"></span><span>WhatsApp</span>
         </button>
         <button class="source-btn" id="src_pdf" onclick="selectSource('pdf')">
-          <span class="src-icon">📄</span><span>PDF</span>
+          <span class="src-icon"></span><span>PDF</span>
         </button>
         <button class="source-btn" id="src_image" onclick="selectSource('image')">
-          <span class="src-icon">🖼️</span><span>Imagem / Print</span>
+          <span class="src-icon"></span><span>Imagem / Print</span>
         </button>
         <button class="source-btn" id="src_planilha" onclick="selectSource('planilha')" style="grid-column:1/-1">
-          <span class="src-icon">📋</span><span>Planilhas de programação (lote — v5.1)</span>
+          <span class="src-icon"></span><span>Planilhas de programação (lote — v5.1)</span>
         </button>
       </div>
 
@@ -830,22 +832,22 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
       <div id="planilhaTipoBlock" style="display:none;margin-bottom:14px">
         <div class="form-label" style="margin-bottom:8px">Qual planilha? (Fluxograma v5.1)</div>
         <div class="source-grid" style="grid-template-columns:1fr 1fr;margin-bottom:6px">
-          <button class="ptipo-btn selected" id="ptipo_preparacao" onclick="selectPlanilhaTipo('preparacao')">1 · 🔧 Preparação</button>
-          <button class="ptipo-btn" id="ptipo_entrega" onclick="selectPlanilhaTipo('entrega')">2 · 🚗 Entrega (agendar)</button>
-          <button class="ptipo-btn" id="ptipo_reagendamento" onclick="selectPlanilhaTipo('reagendamento')">3 · 🔁 Reagendamento</button>
-          <button class="ptipo-btn" id="ptipo_entregues" onclick="selectPlanilhaTipo('entregues')">4 · ✅ Entregues</button>
+          <button class="ptipo-btn selected" id="ptipo_preparacao" onclick="selectPlanilhaTipo('preparacao')">1 · Preparação</button>
+          <button class="ptipo-btn" id="ptipo_entrega" onclick="selectPlanilhaTipo('entrega')">2 · Entrega (agendar)</button>
+          <button class="ptipo-btn" id="ptipo_reagendamento" onclick="selectPlanilhaTipo('reagendamento')">3 · Reagendamento</button>
+          <button class="ptipo-btn" id="ptipo_entregues" onclick="selectPlanilhaTipo('entregues')">4 · Entregues</button>
         </div>
         <div id="ptipoHint" style="font-size:12px;color:var(--text-light)"></div>
       </div>
 
       <!-- Planilha: upload de PDF (extração automática) -->
       <div id="planilhaPdfBlock" style="display:none;margin-bottom:14px">
-        <div class="form-label" style="margin-bottom:6px">📄 Ler direto de um PDF (sem colar)</div>
+        <div class="form-label" style="margin-bottom:6px">Ler direto de um PDF (sem colar)</div>
         <div class="drop-zone" id="planilhaDrop" onclick="document.getElementById('planilhaPdfInput').click()"
           ondragover="event.preventDefault();this.classList.add('over')"
           ondragleave="this.classList.remove('over')"
           ondrop="event.preventDefault();this.classList.remove('over');handlePlanilhaPdf({target:{files:event.dataTransfer.files}})">
-          <div style="font-size:28px;margin-bottom:6px">📄⬆️</div>
+          <div style="font-size:28px;margin-bottom:6px"></div>
           <div style="font-weight:600">Toque para escolher o PDF da planilha</div>
           <div style="font-size:12px;margin-top:4px">PLANILHA DE ENTREGA / preparação · extração automática</div>
         </div>
@@ -856,15 +858,15 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
 
       <!-- WhatsApp authorized sender -->
       <div id="authBlock" style="display:none;margin-bottom:16px">
-        <div class="form-label" style="margin-bottom:8px">⚠️ Remetente Autorizado (obrigatório)</div>
+        <div class="form-label" style="margin-bottom:8px">Remetente Autorizado (obrigatório)</div>
         <div class="authorized-grid">
-          <button class="auth-btn" id="auth_adriana" onclick="selectSender('Adriana')">👩 Adriana</button>
-          <button class="auth-btn" id="auth_adriano" onclick="selectSender('Adriano')">👨 Adriano</button>
-          <button class="auth-btn" id="auth_junior" onclick="selectSender('Junior Leão')">👨 Junior Leão</button>
-          <button class="auth-btn" id="auth_adrianojr" onclick="selectSender('Adriano Junior')">👦 Adriano Junior</button>
+          <button class="auth-btn" id="auth_adriana" onclick="selectSender('Adriana')">Adriana</button>
+          <button class="auth-btn" id="auth_adriano" onclick="selectSender('Adriano')">Adriano</button>
+          <button class="auth-btn" id="auth_junior" onclick="selectSender('Junior Leão')">Junior Leão</button>
+          <button class="auth-btn" id="auth_adrianojr" onclick="selectSender('Adriano Junior')">Adriano Junior</button>
         </div>
         <div id="unauthorizedWarn" style="display:none;background:var(--red-bg);color:var(--red);border-radius:8px;padding:10px;font-size:13px;font-weight:600;margin-bottom:8px">
-          ⛔ Somente Adriana, Adriano, Junior Leão e Adriano Junior podem enviar pedidos via WhatsApp.
+          Somente Adriana, Adriano, Junior Leão e Adriano Junior podem enviar pedidos via WhatsApp.
         </div>
       </div>
 
@@ -882,7 +884,7 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
           ondragover="event.preventDefault();this.classList.add('over')"
           ondragleave="this.classList.remove('over')"
           ondrop="handleDrop(event)">
-          <div style="font-size:32px;margin-bottom:8px">📁</div>
+          <div style="font-size:32px;margin-bottom:8px"></div>
           <div style="font-weight:600">Toque para selecionar arquivo</div>
           <div style="font-size:12px;margin-top:4px">PDF, JPG, PNG, WEBP</div>
         </div>
@@ -896,14 +898,14 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
       </div>
 
       <button class="btn btn-primary btn-block" onclick="processIntake()" id="btnProcess" disabled style="margin-top:8px">
-        🔍 Processar e Extrair Dados
+        Processar e Extrair Dados
       </button>
     </div>
 
     <!-- Step 2: parsed results + confirm form -->
     <div id="intakeStep2" style="display:none">
       <div style="background:var(--green-bg);border-radius:10px;padding:12px;margin-bottom:14px">
-        <div style="font-weight:700;color:var(--green);font-size:14px">✅ Dados extraídos automaticamente</div>
+        <div style="font-weight:700;color:var(--green);font-size:14px">Dados extraídos automaticamente</div>
         <div style="font-size:12px;color:#35D399;margin-top:3px">Revise os campos abaixo antes de confirmar</div>
         <div class="confidence-bar"><div class="confidence-fill" id="confBar" style="width:0%"></div></div>
         <div style="font-size:11px;color:#35D399;margin-top:4px" id="confLabel"></div>
@@ -977,8 +979,8 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
     <!-- Step 3: resultado da importação em lote (aplicada automaticamente) -->
     <div id="intakeStep3" style="display:none">
       <div style="background:var(--green-bg);border-radius:10px;padding:12px;margin-bottom:14px">
-        <div style="font-weight:700;color:var(--green);font-size:14px">✅ Importação concluída</div>
-        <div style="font-size:12px;color:#35D399;margin-top:3px">Veículos novos foram cadastrados e os já existentes, atualizados automaticamente (com 🔔 tag de alerta na lista).</div>
+        <div style="font-weight:700;color:var(--green);font-size:14px">Importação concluída</div>
+        <div style="font-size:12px;color:#35D399;margin-top:3px">Veículos novos foram cadastrados e os já existentes, atualizados automaticamente (com tag de alerta na lista).</div>
       </div>
       <div id="bulkSummary" style="font-size:13px;margin-bottom:10px"></div>
       <div id="bulkList" style="max-height:46vh;overflow:auto;margin-bottom:12px"></div>
@@ -1021,25 +1023,25 @@ const USE_LOCAL = _storageAvailable();
 
 // ===== DATA STORE =====
 const STAGES = [
-  { name: 'Preparação no Estoque', icon: '🔧', days: 1, color: '#8b5cf6',  resp: 'Colaborador Pátio' },
-  { name: 'Pré-Entrega',           icon: '📄', days: 1, color: '#06b6d4',  resp: 'Programador' },
-  { name: 'Conferência Final',     icon: '🏁', days: 0, color: '#e8394f',  resp: 'Equipe Técnica' },
-  { name: 'Entrega ao Cliente',    icon: '🚗', days: 0, color: '#16a34a',  resp: 'Entregador Técnico' },
-  { name: 'Entregue',              icon: '✅', days: 0, color: '#16a34a',  resp: '—' }
+  { name: 'Preparação no Estoque', icon: '', days: 1, color: '#8b5cf6',  resp: 'Colaborador Pátio' },
+  { name: 'Pré-Entrega',           icon: '', days: 1, color: '#06b6d4',  resp: 'Programador' },
+  { name: 'Conferência Final',     icon: '', days: 0, color: '#e8394f',  resp: 'Equipe Técnica' },
+  { name: 'Entrega ao Cliente',    icon: '', days: 0, color: '#16a34a',  resp: 'Entregador Técnico' },
+  { name: 'Entregue',              icon: '', days: 0, color: '#16a34a',  resp: '—' }
 ];
 
 const CHECKLIST_TEMPLATES = [
   { // Etapa 0: Preparação no Estoque
     stage: 0, items: [
-      '📸 OBRIGATÓRIO — Foto do adesivo GM (VIN SERIAL) registrada',
+      'OBRIGATÓRIO — Foto do adesivo GM (VIN SERIAL) registrada',
       'VIN SERIAL confere com a planilha ✓',
       'Veículo localizado fisicamente no estoque',
-      'Inspeção visual — se houver avaria: 📸 foto + acionar equipe imediatamente',
+      'Inspeção visual — se houver avaria: foto + acionar equipe imediatamente',
       'Frota/Locadora (Via Rápida)? Se SIM: apenas lavagem + tapete (prioridade)',
       'Acessórios instalados — item a item',
       'Insulfilm / películas aplicados',
       'Conferência do responsável — qualidade aprovada',
-      '📲 Comunicar conclusão: Equipe + Vendedor + Gerência + Torre'
+      'Comunicar conclusão: Equipe + Vendedor + Gerência + Torre'
     ]
   },
   { // Etapa 1: Pré-Entrega
@@ -1049,7 +1051,7 @@ const CHECKLIST_TEMPLATES = [
       'Documentos de emplacamento OK',
       'Data e horário de entrega confirmados com o cliente (Planilha 2 — 48h antes)',
       'Veículo pré-separado para a entrega',
-      '📲 Comunicar conclusão a todos'
+      'Comunicar conclusão a todos'
     ]
   },
   { // Etapa 2: Conferência Final
@@ -1058,20 +1060,20 @@ const CHECKLIST_TEMPLATES = [
       'Acessórios e películas conferidos',
       'Lavagem e acabamento aprovados',
       'PLACA instalada e conferida ✓',
-      '📸 OBRIGATÓRIO — Foto da placa instalada',
+      'OBRIGATÓRIO — Foto da placa instalada',
       'Líder do posto de lavagem conduz o veículo até a Área de Entrega',
       'Equipe Técnica GAE recebe e valida',
-      '📲 Comunicar: pronto para entrega'
+      'Comunicar: pronto para entrega'
     ]
   },
   { // Etapa 3: Entrega ao Cliente
     stage: 3, items: [
       'Entregador Técnico GAE aciona o cliente',
       'Conferência final do veículo com o cliente',
-      '📸 OBRIGATÓRIO — Foto do VIN SERIAL + placa (registro final)',
+      'OBRIGATÓRIO — Foto do VIN SERIAL + placa (registro final)',
       'Aceite / assinatura do cliente',
       'Atualizar Planilha 4 (Entregues)',
-      '📲 Comunicação final de encerramento'
+      'Comunicação final de encerramento'
     ]
   }
 ];
@@ -1134,7 +1136,7 @@ function login(profile, userName) {
   const canAdd = ['programador','gerente','torre'].includes(profile);
   document.getElementById('fabBtn').style.display = canAdd ? 'flex' : 'none';
   if (!USE_LOCAL) {
-    setTimeout(() => toast('⚠️ Modo memória — dados não salvos ao fechar'), 1500);
+    setTimeout(() => toast('Modo memória — dados não salvos ao fechar'), 1500);
   }
   renderAll();
   setDefaultDate();
@@ -1181,7 +1183,7 @@ function renderAll() {
 }
 
 // ===== DASHBOARD =====
-// 🗼 Torre de Controle — pendências que precisam de ação/atribuição/comunicação.
+// Torre de Controle — pendências que precisam de ação/atribuição/comunicação.
 function renderTorre(data, active) {
   const el = document.getElementById('dashTorre');
   const card = document.getElementById('torreCard');
@@ -1192,15 +1194,15 @@ function renderTorre(data, active) {
   const semData    = active.filter(v => v.stage>=1 && !v.deliveryDate);
   const atrasados  = active.filter(v => getStatus(v)==='red');
   const groups = [
-    { icon:'🔢', label:'Chassi/VIN SERIAL não conferido', list:chassiPend, color:'red' },
-    { icon:'📲', label:'Comunicação pendente', list:commPend, color:'yellow' },
-    { icon:'👤', label:'Sem responsável atribuído', list:semResp, color:'blue' },
-    { icon:'🗓️', label:'Pré-Entrega sem data', list:semData, color:'yellow' },
-    { icon:'⏰', label:'Atrasados', list:atrasados, color:'red' }
+    { icon:'', label:'Chassi/VIN SERIAL não conferido', list:chassiPend, color:'red' },
+    { icon:'', label:'Comunicação pendente', list:commPend, color:'yellow' },
+    { icon:'', label:'Sem responsável atribuído', list:semResp, color:'blue' },
+    { icon:'', label:'Pré-Entrega sem data', list:semData, color:'yellow' },
+    { icon:'', label:'Atrasados', list:atrasados, color:'red' }
   ];
   const totalPend = groups.reduce((s,g)=>s+g.list.length,0);
   if(totalPend===0){
-    el.innerHTML = '<div style="color:var(--green);font-weight:600;font-size:13px;padding:4px 0">✅ Sem pendências — fluxo em dia.</div>';
+    el.innerHTML = '<div style="color:var(--green);font-weight:600;font-size:13px;padding:4px 0">Sem pendências — fluxo em dia.</div>';
   } else {
     el.innerHTML = groups.filter(g=>g.list.length).map(g => `
       <div style="margin-bottom:8px">
@@ -1302,7 +1304,7 @@ function renderVehicles() {
   });
   const container = document.getElementById('vehiclesList');
   if(list.length === 0) {
-    container.innerHTML = `<div class="empty"><div class="empty-icon">🚗</div><div class="empty-text">Nenhum veículo encontrado</div></div>`;
+    container.innerHTML = `<div class="empty"><div class="empty-icon"></div><div class="empty-text">Nenhum veículo encontrado</div></div>`;
     return;
   }
   container.innerHTML = list.map(v => {
@@ -1313,7 +1315,7 @@ function renderVehicles() {
       <div class="vehicle-card status-${status}" onclick="openDetail(${v.id})">
         <div class="vehicle-info">
           <div>
-            <div class="vehicle-model">${v.model}${v.color?' · '+v.color:''} ${v.changed?'<span class="badge badge-yellow" style="font-size:10px;vertical-align:middle">🔔 Alterado</span>':''}${v.viaRapida?'<span class="badge badge-blue" style="font-size:10px;vertical-align:middle">⚡ Via Rápida</span>':''}${v.reagendado?'<span class="badge badge-red" style="font-size:10px;vertical-align:middle">🔁 Reagendado</span>':''}${v.commPendente!=null?'<span class="badge badge-yellow" style="font-size:10px;vertical-align:middle">📲 Comunicar</span>':''}</div>
+            <div class="vehicle-model">${v.model}${v.color?' · '+v.color:''} ${v.changed?'<span class="badge badge-yellow" style="font-size:10px;vertical-align:middle">Alterado</span>':''}${v.viaRapida?'<span class="badge badge-blue" style="font-size:10px;vertical-align:middle">Via Rápida</span>':''}${v.reagendado?'<span class="badge badge-red" style="font-size:10px;vertical-align:middle">Reagendado</span>':''}${v.commPendente!=null?'<span class="badge badge-yellow" style="font-size:10px;vertical-align:middle">Comunicar</span>':''}</div>
             <div class="vehicle-meta">${v.client}</div>
           </div>
           <span class="badge badge-${status==='green'?'green':status==='yellow'?'yellow':'red'}">${STAGES[v.stage].name}</span>
@@ -1324,8 +1326,8 @@ function renderVehicles() {
           <span class="stage-label">${days} dia(s) em prep.</span>
         </div>
         <div style="margin-top:8px;display:flex;justify-content:space-between;align-items:center">
-          <span style="font-size:11px;color:#9aa0ab">${v.accessories && v.accessories.length > 0 ? `🛠️ ${v.accessories.filter(a=>a.installed).length}/${v.accessories.length}` : ''}${v.fotos && v.fotos.length ? `${v.accessories&&v.accessories.length?' · ':''}📷 ${v.fotos.length}` : ''}</span>
-          <span style="font-size:11px;background:#2b2e35;padding:2px 8px;border-radius:10px;color:var(--text-light)">👤 ${v.assignee || STAGES[v.stage].resp}</span>
+          <span style="font-size:11px;color:#9aa0ab">${v.accessories && v.accessories.length > 0 ? `${v.accessories.filter(a=>a.installed).length}/${v.accessories.length}` : ''}${v.fotos && v.fotos.length ? `${v.accessories&&v.accessories.length?' · ':''}${v.fotos.length}` : ''}</span>
+          <span style="font-size:11px;background:#2b2e35;padding:2px 8px;border-radius:10px;color:var(--text-light)">${v.assignee || STAGES[v.stage].resp}</span>
         </div>
       </div>
     `;
@@ -1338,7 +1340,7 @@ function openDetail(id) {
   const data = getStorage();
   const v = data.vehicles.find(v => v.id === id);
   if(!v) return;
-  if(v.changed){ v.changed = null; setStorage(data); }   // abriu = visto: limpa a tag 🔔
+  if(v.changed){ v.changed = null; setStorage(data); }   // abriu = visto: limpa a tag 
   document.getElementById('detailTitle').textContent = `${v.model} — ${v.client}`;
   const status = getStatus(v);
   document.getElementById('detailBadge').innerHTML = `<span class="badge badge-${status==='green'?'green':status==='yellow'?'yellow':'red'}">${STAGES[v.stage].name}</span>`;
@@ -1384,7 +1386,7 @@ function onPhotoSelected(e) {
   const file = e.target.files && e.target.files[0];
   try { e.target.value = ''; } catch(_) {}
   if (!file) return;
-  toast('📷 Processando foto...');
+  toast('Processando foto...');
   compressImage(file, 1280, 0.55)
     .then(function (dataUrl) { addVehiclePhoto(_photoType || 'Outra', dataUrl); })
     .catch(function (err) { console.warn('[foto] erro:', err); toast('Não consegui processar a foto'); });
@@ -1422,11 +1424,11 @@ function addVehiclePhoto(type, dataUrl) {
   v.fotos = v.fotos || [];
   v.fotos.push({ id: id, type: type, ts: ts, user: user });
   v.history = v.history || [];
-  v.history.push({ ts: ts, action: '📷 Foto registrada (' + type + ')', user: user });
+  v.history.push({ ts: ts, action: 'Foto registrada (' + type + ')', user: user });
   setStorage(data);   // sincroniza só os metadados (imagem vai p/ coleção separada)
   if (window.CloudSync && window.CloudSync.savePhoto) window.CloudSync.savePhoto(id, { d: dataUrl, chassi: v.chassi || '', type: type, ts: Date.now() });
   renderDetailTab('fotos');
-  toast('📷 Foto registrada');
+  toast('Foto registrada');
   if (type === 'VIN SERIAL') verifyChassi(dataUrl);   // OCR + cruzamento com a grade
 }
 function getPhoto(id) {
@@ -1443,31 +1445,31 @@ function getPhoto(id) {
 function renderDetailFotos(v) {
   const el = document.getElementById('detailTabFotos');
   const fotos = v.fotos || [];
-  const tipos = [['VIN SERIAL','🔢'],['Avaria','⚠️'],['Placa','🔖'],['Outra','📷']];
+  const tipos = [['VIN SERIAL',''],['Avaria',''],['Placa',''],['Outra','']];
   const btns = tipos.map(function (t) {
     return '<button class="btn btn-secondary btn-sm" onclick="capturePhoto(\'' + t[0] + '\')">' + t[1] + ' ' + t[0] + '</button>';
   }).join(' ');
   const grid = fotos.length ? fotos.map(function (f) {
     return '<div class="foto-card">' +
-      '<div class="foto-thumb" id="foto-' + f.id + '" onclick="viewPhoto(\'' + f.id + '\')">⏳</div>' +
+      '<div class="foto-thumb" id="foto-' + f.id + '" onclick="viewPhoto(\'' + f.id + '\')"></div>' +
       '<button class="foto-del" onclick="deletePhoto(\'' + f.id + '\')">✕</button>' +
       '<div class="foto-meta"><b>' + f.type + '</b><br>' + formatDateTime(f.ts) + (f.user ? '<br>' + f.user : '') + '</div>' +
       '</div>';
-  }).join('') : '<div class="empty"><div class="empty-icon">📷</div><div class="empty-text">Nenhuma foto ainda.<br>Use os botões acima para registrar a vistoria no pátio.</div></div>';
+  }).join('') : '<div class="empty"><div class="empty-icon"></div><div class="empty-text">Nenhuma foto ainda.<br>Use os botões acima para registrar a vistoria no pátio.</div></div>';
   // Banner de verificação do chassi (OCR x grade)
   var ver = '';
   if (v.chassi) {
-    if (v.chassiCheck === 'checking') ver = '<div class="card" style="background:var(--blue-bg);color:var(--blue)">🔍 Lendo o chassi da foto…</div>';
+    if (v.chassiCheck === 'checking') ver = '<div class="card" style="background:var(--blue-bg);color:var(--blue)">Lendo o chassi da foto…</div>';
     else if (v.chassiVerificado) { var lbl = (v.chassiOCR && v.chassiOCR.modo === 'serial') ? 'VIN SERIAL' : 'Chassi'; ver = '<div class="card" style="background:var(--green-bg);color:var(--green);font-weight:700">✓ ' + lbl + ' conferido com a grade' + (v.chassiOverride ? ' (liberação manual)' : (v.chassiOCR ? ' — leitura ' + v.chassiOCR.ratio + '%' + (v.chassiOCR.fonte ? ' · OCR ' + v.chassiOCR.fonte : '') : '')) + '</div>'; }
     else if (v.chassiOCR && !v.chassiOCR.ok) { var lbl2 = (v.chassiOCR.modo === 'serial') ? 'VIN SERIAL' : 'Chassi'; ver = '<div class="card" style="background:var(--red-bg);color:var(--red);font-weight:700">✗ ' + lbl2 + ' NÃO confere<br><span style="font-weight:400;font-size:12px">Leitura: <b>' + (v.chassiOCR.lido || '—') + '</b> · Grade: <b>' + v.chassiOCR.esperado + '</b> — tire a foto de novo (adesivo GM legível).</span></div>'; }
-    else if (v.chassiCheck === 'error') ver = '<div class="card" style="background:var(--yellow-bg)">⚠️ Não foi possível ler o chassi (precisa de internet na 1ª vez). Tente "Verificar chassi".</div>';
+    else if (v.chassiCheck === 'error') ver = '<div class="card" style="background:var(--yellow-bg)">Não foi possível ler o chassi (precisa de internet na 1ª vez). Tente "Verificar chassi".</div>';
   }
   el.innerHTML =
     ver +
-    '<div class="card"><div class="card-title" style="margin-bottom:8px">📷 Vistoria no pátio</div>' +
+    '<div class="card"><div class="card-title" style="margin-bottom:8px">Vistoria no pátio</div>' +
     '<div style="font-size:12px;color:var(--text-light);margin-bottom:10px">Tire as fotos com a câmera do celular: chassi, avarias e a placa (quando houver). A foto do <b>chassi</b> é lida automaticamente e conferida com a grade.</div>' +
     '<div style="display:flex;gap:8px;flex-wrap:wrap">' + btns +
-    (v.chassi ? ' <button class="btn btn-primary btn-sm" onclick="reverifyChassi()">🔍 Verificar chassi</button>' : '') +
+    (v.chassi ? ' <button class="btn btn-primary btn-sm" onclick="reverifyChassi()">Verificar chassi</button>' : '') +
     '</div></div>' +
     '<div class="foto-grid">' + grid + '</div>';
   fotos.forEach(function (f) {
@@ -1598,7 +1600,7 @@ function verifyChassi(dataUrl) {
   if (!v.chassi) { toast('Sem chassi na grade para comparar'); return; }
   v.chassiCheck = 'checking'; setStorage(data);
   if (currentVehicleId === vid) renderDetailTab(currentDetailTab);
-  toast('🔍 Lendo o chassi da foto...');
+  toast('Lendo o chassi da foto...');
   ocrRead(dataUrl).then(function (res) {
     var text = res.text, fonte = res.fonte;
     var d = getStorage(); var vv = d.vehicles.find(function (x) { return x.id === vid; }); if (!vv) return;
@@ -1633,7 +1635,7 @@ function overrideChassi() {
   var data = getStorage(); var v = data.vehicles.find(function (x) { return x.id === currentVehicleId; }); if (!v) return;
   v.chassiVerificado = true; v.chassiOverride = true;
   v.history = v.history || [];
-  v.history.push({ ts: new Date().toISOString(), action: '⚠️ Liberação MANUAL do chassi (exceção)', user: currentUserName || currentProfile });
+  v.history.push({ ts: new Date().toISOString(), action: 'Liberação MANUAL do chassi (exceção)', user: currentUserName || currentProfile });
   setStorage(data); renderDetailTab(currentDetailTab); toast('Liberado manualmente (exceção registrada)');
 }
 function renderDetailInfo(v) {
@@ -1644,22 +1646,22 @@ function renderDetailInfo(v) {
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
         <div><div class="form-label">Modelo</div><div style="font-weight:700">${v.model}${v.versao?` <span style="font-weight:400;color:var(--text-light)">(${v.versao})</span>`:''}</div></div>
         <div><div class="form-label">Cor</div><div>${v.color||'—'}</div></div>
-        <div><div class="form-label">Chassi</div><div style="font-weight:700;font-family:ui-monospace,monospace;font-size:12.5px">${v.chassi||'—'} ${v.chassi?(v.chassiVerificado?`<span title="Conferido por foto" style="color:var(--green)">✓</span>`:`<span title="Não conferido" style="color:var(--yellow)">⚠</span>`):''}</div></div>
+        <div><div class="form-label">Chassi</div><div style="font-weight:700;font-family:ui-monospace,monospace;font-size:12.5px">${v.chassi||'—'} ${v.chassi?(v.chassiVerificado?`<span title="Conferido por foto" style="color:var(--green)">✓</span>`:`<span title="Não conferido" style="color:var(--yellow)"></span>`):''}</div></div>
         <div><div class="form-label">Placa</div><div>${v.plate||'—'}</div></div>
         <div><div class="form-label">Cliente</div><div style="font-weight:700">${v.client}</div></div>
         <div><div class="form-label">Celular</div><div>${v.phone||'—'}</div></div>
         <div><div class="form-label">Consultor</div><div>${v.seller||'—'}</div></div>
         <div><div class="form-label">Nº Fatura</div><div>${v.invoice||'—'}</div></div>
         <div><div class="form-label">Data Fatura</div><div>${formatDate(v.invoiceDate)}</div></div>
-        ${v.entregador?`<div><div class="form-label">Entregador</div><div>🚗 ${v.entregador}</div></div>`:''}
+        ${v.entregador?`<div><div class="form-label">Entregador</div><div>${v.entregador}</div></div>`:''}
         ${(v.deliveryDate||v.horarioEntrega)?`<div><div class="form-label">Entrega</div><div style="font-weight:700;color:var(--green)">${v.deliveryDate?formatDate(v.deliveryDate):''}${v.horarioEntrega?' · '+v.horarioEntrega:''}</div></div>`:''}
-        ${v.viaRapida?`<div><div class="form-label">Fluxo</div><div style="font-weight:700;color:var(--blue)">⚡ Via Rápida (Frota/Locadora)</div></div>`:''}
-        ${v.reagendado?`<div><div class="form-label">Reagendamento</div><div style="font-weight:700;color:var(--red)">🔁 Reagendado</div></div>`:''}
+        ${v.viaRapida?`<div><div class="form-label">Fluxo</div><div style="font-weight:700;color:var(--blue)">Via Rápida (Frota/Locadora)</div></div>`:''}
+        ${v.reagendado?`<div><div class="form-label">Reagendamento</div><div style="font-weight:700;color:var(--red)">Reagendado</div></div>`:''}
       </div>
       ${v.obs?`<div><div class="form-label">Observações</div><div style="font-size:13px;color:#374151">${v.obs}</div></div>`:''}
     </div>
     <div class="card">
-      <div class="card-title" style="margin-bottom:12px">⏱️ Status — ${daysTotal} dia(s) em preparação</div>
+      <div class="card-title" style="margin-bottom:12px">Status — ${daysTotal} dia(s) em preparação</div>
       <div class="timeline">
         ${STAGES.map((s,i) => `
           <div class="timeline-item">
@@ -1675,7 +1677,7 @@ function renderDetailInfo(v) {
     </div>
     ${v.stage < 4 ? `
     <div style="display:flex;flex-direction:column;gap:8px;margin-top:4px">
-      <button class="btn btn-secondary btn-sm" onclick="toggleViaRapida()" style="align-self:flex-start">${v.viaRapida?'⚡ Via Rápida LIGADA (Frota/Locadora)':'⚡ Marcar Via Rápida (Frota/Locadora)'}</button>
+      <button class="btn btn-secondary btn-sm" onclick="toggleViaRapida()" style="align-self:flex-start">${v.viaRapida?'Via Rápida LIGADA (Frota/Locadora)':'Marcar Via Rápida (Frota/Locadora)'}</button>
       <div class="form-group" style="margin-bottom:0">
         <label class="form-label">Responsável pela etapa (${STAGES[v.stage].resp})</label>
         <div style="display:flex;gap:8px">
@@ -1683,7 +1685,7 @@ function renderDetailInfo(v) {
           <button class="btn btn-primary btn-sm" onclick="setAssignee()">Salvar</button>
         </div>
       </div>
-      ${v.commPendente!=null ? `<button class="btn btn-block" onclick="comunicarConclusao()" style="background:var(--yellow-bg);color:var(--yellow);font-weight:700;border:1px solid var(--yellow)">📲 Comunicar conclusão: ${_stageName(v.commPendente)}</button>` : `<button class="btn btn-secondary btn-block" onclick="comunicarConclusao()">📲 Comunicar status (Equipe · Vendedor · Gerência · Torre)</button>`}
+      ${v.commPendente!=null ? `<button class="btn btn-block" onclick="comunicarConclusao()" style="background:var(--yellow-bg);color:var(--yellow);font-weight:700;border:1px solid var(--yellow)">Comunicar conclusão: ${_stageName(v.commPendente)}</button>` : `<button class="btn btn-secondary btn-block" onclick="comunicarConclusao()">Comunicar status (Equipe · Vendedor · Gerência · Torre)</button>`}
       ${v.stage < 2 ? `
         <div class="form-group" id="delivDateGroup" style="margin-bottom:0">
           <label class="form-label">Agendar Data de Entrega</label>
@@ -1694,16 +1696,16 @@ function renderDetailInfo(v) {
         </div>
       ` : ''}
       ${(v.stage===0 && !v.chassiVerificado) ? `
-        <div class="card" style="background:var(--yellow-bg);padding:12px;font-size:13px;margin:0">⚠️ <b>Liberação bloqueada.</b> Registre a <b>foto do adesivo GM (VIN SERIAL)</b> na aba 📷 Fotos: a leitura precisa <b>conferir</b> com a grade para liberar a preparação.${(v.chassiOCR&&!v.chassiOCR.ok)?`<br>Última leitura: <b>${v.chassiOCR.lido||'—'}</b> · Grade (VIN SERIAL): <b>${v.chassiOCR.esperado}</b>`:''}</div>
+        <div class="card" style="background:var(--yellow-bg);padding:12px;font-size:13px;margin:0"><b>Liberação bloqueada.</b> Registre a <b>foto do adesivo GM (VIN SERIAL)</b> na aba Fotos: a leitura precisa <b>conferir</b> com a grade para liberar a preparação.${(v.chassiOCR&&!v.chassiOCR.ok)?`<br>Última leitura: <b>${v.chassiOCR.lido||'—'}</b> · Grade (VIN SERIAL): <b>${v.chassiOCR.esperado}</b>`:''}</div>
         <button class="btn btn-secondary btn-block" onclick="overrideChassi()">Liberar manualmente (exceção)</button>
       ` : `
         <button class="btn btn-success btn-block" onclick="advanceStage()">
           ✓ Concluir: ${STAGES[v.stage].name} → ${STAGES[v.stage+1].name}
         </button>
       `}
-      ${v.stage >= 1 ? `<button class="btn btn-secondary btn-block" onclick="reagendar()">🔁 Reagendamento (cliente não compareceu)</button>` : ''}
+      ${v.stage >= 1 ? `<button class="btn btn-secondary btn-block" onclick="reagendar()">Reagendamento (cliente não compareceu)</button>` : ''}
       ${v.stage > 0 ? `<button class="btn btn-secondary btn-block" onclick="revertStage()">‹ Voltar: ${STAGES[v.stage-1].name}</button>` : ''}
-    </div>` : `<div class="card" style="background:var(--green-bg);text-align:center;padding:20px"><div style="font-size:28px">🎉</div><div style="font-weight:700;color:var(--green);margin-top:8px">Entregue!</div><div style="font-size:13px;color:#35D399;margin-top:4px">Entregue em ${formatDate(v.deliveryDate)}</div></div>`}
+    </div>` : `<div class="card" style="background:var(--green-bg);text-align:center;padding:20px"><div style="font-size:28px"></div><div style="font-weight:700;color:var(--green);margin-top:8px">Entregue!</div><div style="font-size:13px;color:#35D399;margin-top:4px">Entregue em ${formatDate(v.deliveryDate)}</div></div>`}
   `;
 }
 function saveDeliveryDate() {
@@ -1721,7 +1723,7 @@ function advanceStage() {
   const v = data.vehicles.find(v => v.id === currentVehicleId);
   if(!v || v.stage >= 4) return;
   if(v.stage === 0 && !v.chassiVerificado) {   // só libera a preparação com o chassi conferido
-    toast('⚠️ Confira o chassi pela foto antes de liberar a preparação');
+    toast('Confira o chassi pela foto antes de liberar a preparação');
     return;
   }
   const tpl = CHECKLIST_TEMPLATES.find(t => t.stage === v.stage);
@@ -1734,15 +1736,15 @@ function advanceStage() {
   }
   const etapaConcluida = v.stage;
   v.stage++;
-  v.commPendente = etapaConcluida;   // 📲 comunicação obrigatória da etapa concluída (v5.1)
+  v.commPendente = etapaConcluida;   // comunicação obrigatória da etapa concluída (v5.1)
   v.assignee = '';                    // nova etapa: reatribuir responsável
   v.history = v.history || [];
   v.history.push({ ts: new Date().toISOString(), action: `Avançou para: ${STAGES[v.stage].name}`, user: currentUserName || currentProfile });
   setStorage(data);
   openDetail(currentVehicleId);
-  toast(`Avançado para: ${STAGES[v.stage].name} — 📲 comunique a conclusão`);
+  toast(`Avançado para: ${STAGES[v.stage].name} — comunique a conclusão`);
 }
-// 👤 Atribuição de tarefas: quem é o responsável pela etapa atual.
+// Atribuição de tarefas: quem é o responsável pela etapa atual.
 function setAssignee() {
   const val = (document.getElementById('assigneeInput')||{}).value || '';
   const data = getStorage();
@@ -1751,27 +1753,27 @@ function setAssignee() {
   const before = v.assignee || '';
   v.assignee = val.trim();
   v.history = v.history || [];
-  v.history.push({ ts: new Date().toISOString(), action: v.assignee ? ('👤 Responsável: ' + v.assignee + (before?(' (era '+before+')'):'')) : 'Responsável removido', user: currentUserName || currentProfile });
+  v.history.push({ ts: new Date().toISOString(), action: v.assignee ? ('Responsável: ' + v.assignee + (before?(' (era '+before+')'):'')) : 'Responsável removido', user: currentUserName || currentProfile });
   setStorage(data);
   openDetail(currentVehicleId);
   toast(v.assignee ? ('Responsável: ' + v.assignee) : 'Responsável removido');
 }
-// 📲 Comunicação obrigatória: monta a mensagem e compartilha/copia (WhatsApp).
+// Comunicação obrigatória: monta a mensagem e compartilha/copia (WhatsApp).
 function buildCommMessage(v) {
   const concl = (v.commPendente!=null) ? _stageName(v.commPendente) : null;
   const prox = (v.stage < STAGES.length-1) ? _stageName(v.stage) : 'Entregue';
   const linhas = [
-    '🚗 GAE — ' + (v.model||'') + (v.color?(' · '+v.color):''),
+    'GAE — ' + (v.model||'') + (v.color?(' · '+v.color):''),
     'Cliente: ' + (v.client||'—'),
     'Chassi/VIN SERIAL: ' + (v.chassi||'—')
   ];
-  if(concl) linhas.push('✅ Etapa concluída: ' + concl);
-  linhas.push('➡️ Etapa atual: ' + prox);
-  if(v.assignee) linhas.push('👤 Responsável: ' + v.assignee);
-  if(v.deliveryDate || v.horarioEntrega) linhas.push('🗓️ Entrega: ' + (v.deliveryDate?formatDate(v.deliveryDate):'') + (v.horarioEntrega?(' '+v.horarioEntrega):''));
-  if(v.viaRapida) linhas.push('⚡ Via Rápida (Frota/Locadora)');
-  if(v.reagendado) linhas.push('🔁 Reagendado');
-  linhas.push('📣 Comunicar: Equipe · Vendedor · Gerência · Torre de Controle');
+  if(concl) linhas.push('Etapa concluída: ' + concl);
+  linhas.push('Etapa atual: ' + prox);
+  if(v.assignee) linhas.push('Responsável: ' + v.assignee);
+  if(v.deliveryDate || v.horarioEntrega) linhas.push('Entrega: ' + (v.deliveryDate?formatDate(v.deliveryDate):'') + (v.horarioEntrega?(' '+v.horarioEntrega):''));
+  if(v.viaRapida) linhas.push('Via Rápida (Frota/Locadora)');
+  if(v.reagendado) linhas.push('Reagendado');
+  linhas.push('Comunicar: Equipe · Vendedor · Gerência · Torre de Controle');
   return linhas.join('\n');
 }
 function comunicarConclusao() {
@@ -1786,16 +1788,16 @@ function comunicarConclusao() {
     vv.comunicados[etapa] = new Date().toISOString();
     vv.commPendente = null;   // pendência resolvida
     vv.history = vv.history || [];
-    vv.history.push({ ts: new Date().toISOString(), action: '📲 Comunicado (' + via + ') — ' + _stageName(etapa), user: currentUserName || currentProfile });
+    vv.history.push({ ts: new Date().toISOString(), action: 'Comunicado (' + via + ') — ' + _stageName(etapa), user: currentUserName || currentProfile });
     setStorage(d);
     openDetail(currentVehicleId);
-    toast('📲 Comunicação registrada');
+    toast('Comunicação registrada');
   };
   if(navigator.share){
     navigator.share({ title:'GAE', text:msg }).then(function(){ registrar('compartilhado'); })
       .catch(function(){ /* usuário cancelou: não registra */ });
   } else if(navigator.clipboard && navigator.clipboard.writeText){
-    navigator.clipboard.writeText(msg).then(function(){ registrar('copiado'); toast('📋 Mensagem copiada — cole no WhatsApp'); })
+    navigator.clipboard.writeText(msg).then(function(){ registrar('copiado'); toast('Mensagem copiada — cole no WhatsApp'); })
       .catch(function(){ alert(msg); registrar('exibido'); });
   } else {
     alert(msg); registrar('exibido');
@@ -1818,10 +1820,10 @@ function toggleViaRapida() {
   if(!v) return;
   v.viaRapida = !v.viaRapida;
   v.history = v.history || [];
-  v.history.push({ ts: new Date().toISOString(), action: v.viaRapida ? '⚡ Marcado como Via Rápida (Frota/Locadora)' : 'Via Rápida desativada', user: currentUserName || currentProfile });
+  v.history.push({ ts: new Date().toISOString(), action: v.viaRapida ? 'Marcado como Via Rápida (Frota/Locadora)' : 'Via Rápida desativada', user: currentUserName || currentProfile });
   setStorage(data);
   openDetail(currentVehicleId);
-  toast(v.viaRapida ? '⚡ Via Rápida ligada — prioridade' : 'Via Rápida desligada');
+  toast(v.viaRapida ? 'Via Rápida ligada — prioridade' : 'Via Rápida desligada');
 }
 // Reagendamento: cliente não compareceu — volta o veículo p/ Pré-Entrega e pede nova data.
 function reagendar() {
@@ -1836,15 +1838,15 @@ function reagendar() {
   v.reagendado = true;
   if(nova.trim()) v.deliveryDate = nova.trim(); else v.deliveryDate = '';
   v.history = v.history || [];
-  v.history.push({ ts: new Date().toISOString(), action: '🔁 Reagendado' + (motivo.trim() ? ' — ' + motivo.trim() : '') + (nova.trim() ? ' · nova data ' + nova.trim() : ' · data a definir'), user: currentUserName || currentProfile });
+  v.history.push({ ts: new Date().toISOString(), action: 'Reagendado' + (motivo.trim() ? ' — ' + motivo.trim() : '') + (nova.trim() ? ' · nova data ' + nova.trim() : ' · data a definir'), user: currentUserName || currentProfile });
   setStorage(data);
   openDetail(currentVehicleId);
-  toast('🔁 Veículo reagendado (Pré-Entrega)');
+  toast('Veículo reagendado (Pré-Entrega)');
 }
 function renderDetailChecklist(v) {
   const el = document.getElementById('detailTabChecklist');
   const tpl = CHECKLIST_TEMPLATES.find(t => t.stage === v.stage);
-  if(!tpl) { el.innerHTML = '<div class="empty"><div class="empty-icon">✅</div><div class="empty-text">Checklist concluído para etapas anteriores</div></div>'; return; }
+  if(!tpl) { el.innerHTML = '<div class="empty"><div class="empty-icon"></div><div class="empty-text">Checklist concluído para etapas anteriores</div></div>'; return; }
   const checks = (v.checklists && v.checklists[v.stage]) || tpl.items.map(()=>false);
   const done = checks.filter(Boolean).length;
   el.innerHTML = `
@@ -1883,7 +1885,7 @@ function renderDetailAccessories(v, data) {
   const el = document.getElementById('detailTabAccessories');
   if(!v.accessories || v.accessories.length === 0) {
     el.innerHTML = `
-      <div class="empty"><div class="empty-icon">🛠️</div><div class="empty-text">Nenhum acessório cadastrado</div></div>
+      <div class="empty"><div class="empty-icon"></div><div class="empty-text">Nenhum acessório cadastrado</div></div>
       <button class="btn btn-primary btn-block" style="margin-top:12px" onclick="openAddAccModal()">+ Adicionar Acessório</button>
     `;
     return;
@@ -1904,7 +1906,7 @@ function renderDetailAccessories(v, data) {
           ${acc.code?`<div class="acc-detail">Código: ${acc.code}</div>`:''}
           ${acc.installedAt?`<div class="acc-detail">Instalado em: ${formatDate(acc.installedAt)}</div>`:''}
         </div>
-        ${acc.installed?'<span style="font-size:18px">✅</span>':'<span style="font-size:18px;color:#3c404a">⬜</span>'}
+        ${acc.installed?'<span style="font-size:18px"></span>':'<span style="font-size:18px;color:#3c404a"></span>'}
       </div>
     `).join('')}
   `;
@@ -1921,7 +1923,7 @@ function toggleAcc(idx) {
 function renderDetailHistory(v) {
   const el = document.getElementById('detailTabHistory');
   const hist = v.history || [];
-  if(hist.length === 0) { el.innerHTML = '<div class="empty"><div class="empty-icon">📋</div><div class="empty-text">Sem histórico ainda</div></div>'; return; }
+  if(hist.length === 0) { el.innerHTML = '<div class="empty"><div class="empty-icon"></div><div class="empty-text">Sem histórico ainda</div></div>'; return; }
   el.innerHTML = `
     <div class="card">
       <div class="timeline">
@@ -1944,7 +1946,7 @@ function renderChecklistVehicles() {
   const data = getStorage();
   const active = data.vehicles.filter(v => v.stage < 4);
   const el = document.getElementById('checklistVehicles');
-  if(active.length === 0) { el.innerHTML = '<div class="empty"><div class="empty-icon">✅</div><div class="empty-text">Nenhum veículo em preparação</div></div>'; return; }
+  if(active.length === 0) { el.innerHTML = '<div class="empty"><div class="empty-icon"></div><div class="empty-text">Nenhum veículo em preparação</div></div>'; return; }
   el.innerHTML = active.map(v => {
     const tpl = CHECKLIST_TEMPLATES.find(t => t.stage === v.stage);
     const checks = (v.checklists && v.checklists[v.stage]) || [];
@@ -1975,7 +1977,7 @@ function openDetailChecklist(id) {
 function renderDefects() {
   const data = getStorage();
   const el = document.getElementById('defectsList');
-  if(data.defects.length === 0) { el.innerHTML = '<div class="empty"><div class="empty-icon">✅</div><div class="empty-text">Nenhum defeito registrado</div></div>'; return; }
+  if(data.defects.length === 0) { el.innerHTML = '<div class="empty"><div class="empty-icon"></div><div class="empty-text">Nenhum defeito registrado</div></div>'; return; }
   el.innerHTML = [...data.defects].reverse().map(d => `
     <div class="defect-card ${d.resolved?'resolved':''}">
       <div style="display:flex;justify-content:space-between;align-items:flex-start">
@@ -1984,7 +1986,7 @@ function renderDefects() {
           <div style="font-size:12px;color:#9aa0ab;margin-top:2px">${d.type} · ${d.location}</div>
         </div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
-          <span class="badge badge-${d.severity==='alta'?'red':d.severity==='media'?'yellow':'green'}">${d.severity==='alta'?'🔴 Alta':d.severity==='media'?'🟡 Média':'🟢 Baixa'}</span>
+          <span class="badge badge-${d.severity==='alta'?'red':d.severity==='media'?'yellow':'green'}">${d.severity==='alta'?'Alta':d.severity==='media'?'Média':'Baixa'}</span>
           ${!d.resolved?`<button class="btn btn-success btn-sm" onclick="resolveDefect(${d.id})">Resolver</button>`:`<span class="badge badge-green">Resolvido</span>`}
         </div>
       </div>
@@ -2137,8 +2139,8 @@ let planilhaTipo = 'preparacao';   // v5.1: 1 Preparação · 2 Entrega · 3 Rea
 const PLANILHA_TIPOS = {
   preparacao:    { label: '1 · Preparação',    hint: 'Fila de preparação: cadastra novos na etapa Preparação e atualiza os existentes.' },
   entrega:       { label: '2 · Entrega',       hint: 'Agenda diária (48h antes): define data/horário/entregador e leva o veículo para a Pré-Entrega.' },
-  reagendamento: { label: '3 · Reagendamento', hint: 'Cliente não compareceu: marca 🔁 Reagendado e volta o veículo para a Pré-Entrega com a nova data.' },
-  entregues:     { label: '4 · Entregues',     hint: 'Confirmação de entrega: marca os veículos como ✅ Entregue.' }
+  reagendamento: { label: '3 · Reagendamento', hint: 'Cliente não compareceu: marca Reagendado e volta o veículo para a Pré-Entrega com a nova data.' },
+  entregues:     { label: '4 · Entregues',     hint: 'Confirmação de entrega: marca os veículos como Entregue.' }
 };
 
 function openIntakePreFilled() {
@@ -2184,10 +2186,10 @@ function selectSource(src) {
   if(src === 'planilha') {
     selectPlanilhaTipo(planilhaTipo);
     ta.placeholder = 'Cole aqui o texto da planilha.\nO app extrai todos os veículos automaticamente pelo chassi.';
-    document.getElementById('btnProcess').textContent = '🔍 Processar planilha (lote)';
+    document.getElementById('btnProcess').textContent = 'Processar planilha (lote)';
   } else {
     ta.placeholder = 'Cole a mensagem do WhatsApp ou e-mail aqui...';
-    document.getElementById('btnProcess').textContent = '🔍 Processar e Extrair Dados';
+    document.getElementById('btnProcess').textContent = 'Processar e Extrair Dados';
   }
   if(src !== 'whatsapp') { intakeSender = null; document.querySelectorAll('.auth-btn').forEach(b => b.classList.remove('selected')); }
   checkIntakeReady();
@@ -2445,7 +2447,7 @@ function applyPlanilhaRows(rows,data,ts,user,tipo){
       var stageChanged = _applyTipoStage(v, tipo, changes, maxStage);
       if(changes.length || stageChanged){
         if(!changes.length) changes.push('Planilha ' + PLANILHA_TIPOS[tipo].label + ' aplicada');
-        v.changed = ts;   // 🔔 tag de alerta (some ao abrir o veículo)
+        v.changed = ts;   // tag de alerta (some ao abrir o veículo)
         v.history=v.history||[]; v.history.push({ts:ts, action:'Planilha ' + PLANILHA_TIPOS[tipo].label + ' — '+changes.join(' · '), user:user});
         alterados++; rel.alterados.push({chassi:v.chassi, cliente:v.client, changes:changes});
       } else { semMudanca++; }
@@ -2518,16 +2520,16 @@ function handlePlanilhaPdf(e){
   if(!file) return;
   if(!/pdf/i.test(file.type||'') && !/\.pdf$/i.test(file.name||'')){ toast('Selecione um arquivo PDF'); return; }
   const st = document.getElementById('planilhaPdfStatus');
-  st.textContent = '⏳ Lendo o PDF...';
+  st.textContent = 'Lendo o PDF...';
   extractPlanilhaFromPdf(file).then(text=>{
     document.getElementById('intakeText').value = text;
     const n = (text.match(/\b[0-9][0-9A-HJ-NPR-Z]{16}\b/g)||[]).length;
-    if(n===0){ st.textContent = '⚠️ Nenhum chassi encontrado no PDF. Confira o arquivo ou cole o texto.'; toast('Não encontrei veículos nesse PDF'); return; }
-    st.textContent = `✅ PDF lido — ${n} veículo(s) encontrado(s).`;
+    if(n===0){ st.textContent = 'Nenhum chassi encontrado no PDF. Confira o arquivo ou cole o texto.'; toast('Não encontrei veículos nesse PDF'); return; }
+    st.textContent = `PDF lido — ${n} veículo(s) encontrado(s).`;
     processPlanilhaIntake();
   }).catch(err=>{
     console.warn('[PDF] falha ao extrair:', err);
-    st.textContent = '⚠️ Não consegui ler este PDF (precisa de internet na 1ª vez). Cole o texto no campo abaixo.';
+    st.textContent = 'Não consegui ler este PDF (precisa de internet na 1ª vez). Cole o texto no campo abaixo.';
     toast('Falha ao ler o PDF — cole o texto manualmente');
   });
   try { e.target.value = ''; } catch(_) {}
@@ -2546,7 +2548,7 @@ function processPlanilhaIntake(){
   setStorage(data);
   renderAll();
   showPlanilhaReport(r, res.date, ignoradas);
-  toast(`✅ ${r.novos} novo(s) · 🔔 ${r.alterados} atualizado(s)`);
+  toast(`${r.novos} novo(s) · ${r.alterados} atualizado(s)`);
 }
 function showPlanilhaReport(r, date, ignoradas){
   const dataBR = date ? date.split('-').reverse().join('/') : null;
@@ -2554,19 +2556,19 @@ function showPlanilhaReport(r, date, ignoradas){
   document.getElementById('bulkSummary').innerHTML =
     `<div class="bulk-sub" style="margin-bottom:8px">Planilha <b>${tipoLabel}</b>${dataBR?` · <b>${dataBR}</b>`:''}</div>
      <div style="display:flex;gap:6px;flex-wrap:wrap">
-       <span class="badge badge-green">✅ ${r.novos} novo(s)</span>
-       <span class="badge badge-yellow">🔔 ${r.alterados} atualizado(s)</span>
+       <span class="badge badge-green">${r.novos} novo(s)</span>
+       <span class="badge badge-yellow">${r.alterados} atualizado(s)</span>
        <span class="badge badge-blue">= ${r.semMudanca} sem mudança</span>
-       ${ignoradas?`<span class="badge badge-red">⚠️ ${ignoradas} sem chassi</span>`:''}
+       ${ignoradas?`<span class="badge badge-red">${ignoradas} sem chassi</span>`:''}
      </div>`;
   let list = '';
   if(r.relatorio.alterados.length){
-    list += `<div style="font-weight:700;font-size:13px;margin:6px 0">🔔 Alterações aplicadas automaticamente</div>`;
+    list += `<div style="font-weight:700;font-size:13px;margin:6px 0">Alterações aplicadas automaticamente</div>`;
     list += r.relatorio.alterados.map(a =>
       `<div class="bulk-row bulk-warn"><div class="bulk-main"><div class="bulk-title">${a.cliente||a.chassi}</div><div class="bulk-sub">${a.changes.join('<br>')}</div></div></div>`).join('');
   }
   if(r.relatorio.novos.length){
-    list += `<div style="font-weight:700;font-size:13px;margin:10px 0 6px">✅ Novos cadastrados (${r.relatorio.novos.length})</div>`;
+    list += `<div style="font-weight:700;font-size:13px;margin:10px 0 6px">Novos cadastrados (${r.relatorio.novos.length})</div>`;
     list += `<div class="bulk-sub">${r.relatorio.novos.map(n=>n.cliente||n.chassi).join(' · ')}</div>`;
   }
   document.getElementById('bulkList').innerHTML = list;
@@ -2608,7 +2610,7 @@ function processIntake() {
   document.getElementById('confLabel').textContent = `Confiança: ${conf}% — ${conf>70?'Alta — verifique e confirme':'Média/Baixa — preencha os campos faltantes'}`;
 
   // Parsed preview
-  const srcLabels = {email:'📧 E-mail', whatsapp:`💬 WhatsApp (${intakeSender})`, pdf:'📄 PDF', image:'🖼️ Imagem'};
+  const srcLabels = {email:'E-mail', whatsapp:`WhatsApp (${intakeSender})`, pdf:'PDF', image:'Imagem'};
   document.getElementById('parsedPreview').innerHTML = `
     <div class="parsed-field"><span class="parsed-key">Origem</span><span class="parsed-val">${srcLabels[intakeSource]}</span></div>
     ${parsed.model?`<div class="parsed-field"><span class="parsed-key">Modelo</span><span class="parsed-val" style="font-weight:700">${parsed.model}</span></div>`:''}
@@ -2694,7 +2696,7 @@ function confirmIntake() {
   setStorage(data);
   closeModal('intakeModal');
   renderAll();
-  toast(`✅ ${model} de ${client} cadastrado!`);
+  toast(`${model} de ${client} cadastrado!`);
 }
 
 // ===== RENDER INTAKE LIST =====
@@ -2704,10 +2706,10 @@ function renderIntakeList() {
   const el = document.getElementById('intakeList');
   if(!el) return;
   if(intakes.length === 0) {
-    el.innerHTML = `<div class="empty"><div class="empty-icon">📥</div><div class="empty-text">Nenhuma entrada registrada ainda.<br>Toque em "+ Nova Entrada" para registrar um pedido.</div></div>`;
+    el.innerHTML = `<div class="empty"><div class="empty-icon"></div><div class="empty-text">Nenhuma entrada registrada ainda.<br>Toque em "+ Nova Entrada" para registrar um pedido.</div></div>`;
     return;
   }
-  const srcIcons = {email:'📧',whatsapp:'💬',pdf:'📄',image:'🖼️'};
+  const srcIcons = {email:'',whatsapp:'',pdf:'',image:''};
   el.innerHTML = [...intakes].reverse().map(it => {
     const v = data.vehicles.find(v=>v.id===it.vehicleId);
     const stage = v ? STAGES[v.stage].name : 'Entregue';
@@ -2715,7 +2717,7 @@ function renderIntakeList() {
       <div class="intake-card processed" onclick="${v?'openDetail('+it.vehicleId+')':''}">
         <div style="display:flex;justify-content:space-between;align-items:flex-start">
           <div>
-            <div style="font-weight:700;font-size:14px">${srcIcons[it.source]||'📥'} ${it.vehicleName}</div>
+            <div style="font-weight:700;font-size:14px">${srcIcons[it.source]||''} ${it.vehicleName}</div>
             <div style="font-size:12px;color:#9aa0ab;margin-top:2px">
               ${it.source.toUpperCase()}${it.sender?' · '+it.sender:''} · ${formatDateTime(it.ts)}
             </div>
@@ -2731,14 +2733,14 @@ function renderIntakeList() {
 // As chaves do Firebase já vêm embutidas (firebase-config.js), então não há
 // tela de configuração no app — aqui ficam só os rótulos de status.
 function cloudStatusLabel(s){
-  var map={ online:['🟢','Sincronizado','var(--green)'], conectando:['🟡','Conectando…','var(--yellow)'],
-            erro:['🔴','Sem conexão com a nuvem','var(--red)'], desligado:['⚪','Local (sem nuvem)','var(--text-light)'] };
+  var map={ online:['','Sincronizado','var(--green)'], conectando:['','Conectando…','var(--yellow)'],
+            erro:['','Sem conexão com a nuvem','var(--red)'], desligado:['','Local (sem nuvem)','var(--text-light)'] };
   var m=map[s]||map.desligado;
   return '<span style="color:'+m[2]+';font-weight:700">'+m[0]+' '+m[1]+'</span>';
 }
 function updateCloudChip(s){
   var chip=document.getElementById('cloudChip');
-  if(chip){ var map={online:'🟢 Nuvem',conectando:'🟡 …',erro:'🔴 Offline',desligado:'☁️ Local'}; chip.textContent=map[s]||map.desligado; }
+  if(chip){ var map={online:'Nuvem',conectando:'…',erro:'Offline',desligado:'Local'}; chip.textContent=map[s]||map.desligado; }
   var ls=document.getElementById('cloudLoginStatus'); if(ls) ls.innerHTML=cloudStatusLabel(s);
 }
 
