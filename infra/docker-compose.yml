@@ -145,6 +145,37 @@ services:
 # ──────────────────────────────────────────
 # Volumes persistentes
 # ──────────────────────────────────────────
+  # ──────────────────────────────────────────
+  # Dr. João Holanda Agent — cérebro do ecossistema
+  # ──────────────────────────────────────────
+  joao_holanda:
+    build:
+      context: ../agents
+      dockerfile: Dockerfile
+    container_name: joao_holanda_agent
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - EVOLUTION_API_URL=http://evolution_api:8080
+      - EVOLUTION_API_KEY=${EVOLUTION_API_KEY}
+      - WHATSAPP_INSTANCE_NAME=edilson
+      - ZEP_API_URL=http://zep:8000
+      - ZEP_API_KEY=${ZEP_API_KEY}
+      - ZEP_SESSION_ID=${ZEP_SESSION_ID}
+      - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY}
+      - ELEVENLABS_VOICE_ID=${ELEVENLABS_VOICE_ID}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - VPS_IP=${VPS_IP}
+      - EDILSON_PHONE=${EDILSON_PHONE}
+      - N8N_FAMILY_GROUP_WA_ID=${N8N_FAMILY_GROUP_WA_ID}
+    depends_on:
+      - zep
+      - postgres
+    networks:
+      - automacao_net
+
 volumes:
   postgres_data:
   redis_data:
