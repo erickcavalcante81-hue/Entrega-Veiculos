@@ -79,7 +79,7 @@ services:
 
   # ──────────────────────────────────────────
   # Zep — segundo cérebro / memória longitudinal
-  # Backend LLM: Nvidia NIM (OpenAI-compatível)
+  # Config via arquivo (env vars ignoradas no v0.27.x)
   # ──────────────────────────────────────────
   zep:
     image: ghcr.io/getzep/zep:latest
@@ -87,20 +87,8 @@ services:
     restart: always
     ports:
       - "8000:8000"
-    environment:
-      - ZEP_STORE_TYPE=postgres
-      - ZEP_STORE_POSTGRES_DSN=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/zep?sslmode=disable
-      - ZEP_AUTH_REQUIRED=true
-      - ZEP_AUTH_SECRET=${ZEP_API_KEY}
-      - ZEP_LOG_LEVEL=info
-      - ZEP_MEMORY_MESSAGE_WINDOW=12
-      # Nvidia NIM como backend OpenAI-compatível para sumarização e extração de entidades
-      - ZEP_OPENAI_API_KEY=${NVIDIA_NIM_API_KEY}
-      - ZEP_LLM_OPENAI_ENDPOINT=https://integrate.api.nvidia.com/v1
-      - ZEP_LLM_MODEL=meta/llama-3.1-8b-instruct
-      # Variáveis padrão OpenAI SDK (Go e Python) para endpoint customizado
-      - OPENAI_API_KEY=${NVIDIA_NIM_API_KEY}
-      - OPENAI_API_BASE=https://integrate.api.nvidia.com/v1
+    volumes:
+      - ./zep_config.yaml:/app/config.yaml:ro
     depends_on:
       postgres:
         condition: service_healthy

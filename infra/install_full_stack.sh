@@ -86,9 +86,56 @@ fi
 python3 -c "import httpx; print('  httpx disponível ✓')" 2>/dev/null \
   || echo "  AVISO: httpx ainda não importável (init Zep será pulado)."
 
-# ─── PASSO 5: Sobe Zep ────────────────────────────────────────────────────────
+# ─── PASSO 5: Gera arquivo de configuração do Zep ─────────────────────────────
 echo ""
-echo "════ PASSO 5 — Subindo Zep (segundo cérebro) ════"
+echo "════ PASSO 5 — Gerando zep_config.yaml ════"
+# Zep CE v0.27.x ignora variáveis de ambiente para store.type e llm;
+# é necessário fornecer um config.yaml explícito montado no container.
+cat > /root/automacao/zep_config.yaml << ZEOF
+server:
+  port: 8000
+
+store:
+  type: postgres
+  postgres:
+    dsn: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/zep?sslmode=disable"
+
+auth:
+  required: true
+  secret: "${ZEP_API_KEY}"
+
+llm:
+  service: openai
+  model: meta/llama-3.1-8b-instruct
+  openai_api_key: "${NVIDIA_NIM_API_KEY}"
+  openai_endpoint: "https://integrate.api.nvidia.com/v1"
+
+extractors:
+  documents:
+    embeddings:
+      enabled: true
+      dimensions: 1024
+      service: openai
+      model: nvidia/nv-embedqa-e5-v5
+  messages:
+    embeddings:
+      enabled: true
+      dimensions: 1024
+      service: openai
+      model: nvidia/nv-embedqa-e5-v5
+
+log:
+  level: info
+
+memory:
+  message_window: 12
+ZEOF
+echo "  zep_config.yaml gerado ✓"
+echo "  Store: postgres | LLM: meta/llama-3.1-8b-instruct via NIM"
+
+# ─── PASSO 6: Sobe Zep ────────────────────────────────────────────────────────
+echo ""
+echo "════ PASSO 6 — Subindo Zep (segundo cérebro) ════"
 docker compose up -d zep
 
 echo "  Aguardando Zep inicializar (máx 10 min — baixa modelos NLP na 1ª vez)..."
