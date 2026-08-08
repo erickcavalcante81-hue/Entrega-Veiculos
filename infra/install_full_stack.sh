@@ -248,7 +248,14 @@ fi
 echo ""
 echo "════ PASSO 8 — Build do agente Dr. João Holanda ════"
 echo "  (pode demorar 2-3 min no primeiro build)"
-docker compose build joao_holanda 2>&1 | tail -10
+BUILD_LOG=$(docker compose build joao_holanda 2>&1)
+if echo "$BUILD_LOG" | grep -qiE 'ERROR|failed to (solve|compute)'; then
+  echo "  ✗ BUILD FALHOU — saída completa:"
+  echo "$BUILD_LOG" | tail -40 | sed 's/^/    /'
+else
+  echo "$BUILD_LOG" | tail -5 | sed 's/^/    /'
+  echo "  Build OK ✓"
+fi
 docker compose up -d joao_holanda
 echo ""
 echo "  Aguardando agente inicializar..."
@@ -268,9 +275,10 @@ if [ "$AGENT_OK" = "false" ]; then
   docker logs --tail 20 joao_holanda_agent 2>/dev/null || true
 fi
 
-# ─── PASSO 9: Configura webhook Evolution API → Agente ────────────────────────
+# ─── PASSO 9: Cria instância WhatsApp e configura webhook ────────────────────
+# A instância deve existir ANTES de configurar o webhook, senão retorna 404.
 echo ""
-echo "════ PASSO 9 — Configurando webhook Evolution API → Dr. João Holanda ════"
+echo "════ PASSO 9 — Instância WhatsApp + webhook → Dr. João Holanda ════"
 
 # Aguarda Evolution API estar no ar (pode estar reiniciando)
 EVO_OK=false
@@ -283,21 +291,55 @@ for i in $(seq 1 12); do
   echo "  Aguardando Evolution API... ($i/12)"; sleep 10
 done
 
-if [ "$EVO_OK" = "true" ]; then
+if [ "$EVO_OK" = "false" ]; then
+  echo "  AVISO: Evolution API indisponível. Logs:"
+  docker logs --tail 10 evolution_api 2>/dev/null || true
+else
+  # 9a. Verifica se a instância 'edilson' já existe
+  INST=$(curl -s "http://localhost:8080/instance/fetchInstances" \
+    -H "apikey: $EVOLUTION_API_KEY" 2>/dev/null)
+  if echo "$INST" | grep -q '"edilson"'; then
+    echo "  Instância 'edilson' já existe ✓"
+  else
+    echo "  Criando instância 'edilson'..."
+    CREATE=$(curl -s -X POST "http://localhost:8080/instance/create" \
+      -H "apikey: $EVOLUTION_API_KEY" \
+      -H "Content-Type: application/json" \
+      -d '{"instanceName":"edilson","qrcode":true,"integration":"WHATSAPP-BAILEYS"}' 2>&1)
+    echo "    ${CREATE:0:300}"
+    sleep 5
+  fi
+
+  # 9b. Configura o webhook — Evolution v2.x usa payload aninhado em "webhook"
+  echo "  Configurando webhook..."
   WH=$(curl -s -X POST "http://localhost:8080/webhook/set/edilson" \
     -H "apikey: $EVOLUTION_API_KEY" \
     -H "Content-Type: application/json" \
     -d '{
-      "url": "http://joao_holanda_agent:3000/webhook/whatsapp",
-      "webhook_by_events": false,
-      "webhook_base64": false,
-      "events": ["MESSAGES_UPSERT","MESSAGES_UPDATE","CONNECTION_UPDATE"]
-    }' 2>/dev/null)
-  echo "  Webhook: $WH"
-else
-  echo "  AVISO: Evolution API indisponível. Webhook não configurado."
-  echo "  Logs Evolution:"
-  docker logs --tail 10 evolution_api 2>/dev/null || true
+      "webhook": {
+        "enabled": true,
+        "url": "http://joao_holanda_agent:3000/webhook/whatsapp",
+        "byEvents": false,
+        "base64": false,
+        "events": ["MESSAGES_UPSERT","MESSAGES_UPDATE","CONNECTION_UPDATE"]
+      }
+    }' 2>&1)
+
+  # Fallback para o formato plano da v1.x, caso a v2 rejeite
+  if echo "$WH" | grep -qi '"error"\|"status":4'; then
+    echo "    Formato v2 rejeitado, tentando v1..."
+    WH=$(curl -s -X POST "http://localhost:8080/webhook/set/edilson" \
+      -H "apikey: $EVOLUTION_API_KEY" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "url": "http://joao_holanda_agent:3000/webhook/whatsapp",
+        "webhook_by_events": false,
+        "webhook_base64": false,
+        "enabled": true,
+        "events": ["MESSAGES_UPSERT","MESSAGES_UPDATE","CONNECTION_UPDATE"]
+      }' 2>&1)
+  fi
+  echo "    ${WH:0:300}"
 fi
 
 # ─── PASSO 10: QR Code WhatsApp ────────────────────────────────────────────────
@@ -305,27 +347,35 @@ echo ""
 echo "════ PASSO 10 — Gerando QR Code do WhatsApp ════"
 
 if [ "$EVO_OK" = "true" ]; then
-  # Cria instância se não existir
-  curl -s -X POST "http://localhost:8080/instance/create" \
-    -H "apikey: $EVOLUTION_API_KEY" \
-    -H "Content-Type: application/json" \
-    -d '{"instanceName":"edilson","qrcode":true,"integration":"WHATSAPP-BAILEYS"}' \
-    > /dev/null 2>&1 || true
-
-  sleep 5
   QR=$(curl -s "http://localhost:8080/instance/connect/edilson" \
     -H "apikey: $EVOLUTION_API_KEY" 2>/dev/null)
-  QR_B64=$(echo "$QR" | python3 -c "
-import sys, json
+
+  # Salva o QR como PNG para abrir direto no navegador
+  echo "$QR" | python3 -c "
+import sys, json, base64
 try:
     d = json.load(sys.stdin)
-    qr = d.get('qrcode', {})
-    print(qr.get('base64', 'QR indisponível')[:400])
-except Exception as e:
-    print('Erro ao parsear QR:', str(e))
-" 2>/dev/null || echo "$QR")
+except Exception:
+    print('  Resposta não-JSON da Evolution API:'); print('  ' + sys.stdin.read()[:200]); raise SystemExit
+
+b64 = d.get('base64') or d.get('qrcode', {}).get('base64', '')
+if b64:
+    raw = b64.split(',', 1)[-1]          # remove prefixo data:image/png;base64,
+    with open('/root/automacao/qrcode.png', 'wb') as f:
+        f.write(base64.b64decode(raw))
+    print('  QR Code salvo em /root/automacao/qrcode.png ✓')
+    print('  Base64 (cole em base64.guru/converter/decode/image):')
+    print('  ' + b64[:300] + '...')
+elif d.get('pairingCode'):
+    print('  Código de pareamento: ' + str(d['pairingCode']))
+elif d.get('instance', {}).get('state') == 'open':
+    print('  WhatsApp JÁ CONECTADO ✓ — não é necessário escanear.')
+else:
+    print('  QR indisponível. Resposta: ' + json.dumps(d)[:250])
+" 2>&1 || echo "  Erro ao processar QR: ${QR:0:200}"
 else
-  QR_B64="Evolution API indisponível — execute depois: curl -s http://localhost:8080/instance/connect/edilson -H 'apikey: \$EVOLUTION_API_KEY'"
+  echo "  Evolution API indisponível — rode depois:"
+  echo "    curl -s http://localhost:8080/instance/connect/edilson -H \"apikey: \$EVOLUTION_API_KEY\""
 fi
 
 # ─── Status final ─────────────────────────────────────────────────────────────
@@ -342,15 +392,25 @@ echo "  Zep (segundo cérebro)  → http://${VPS_IP}:8000"
 echo "  Evolution API           → http://${VPS_IP}:8080"
 echo "  n8n                     → http://${VPS_IP}:5678"
 echo ""
-echo "  QR Code WhatsApp (cole em base64.guru/converter/decode/image):"
-echo "  $QR_B64"
-echo ""
+
 if [ "$ZEP_OK" = "false" ]; then
-  echo "  ⚠  Zep ainda iniciando — aguarde ~5 min e verifique:"
-  echo "     curl http://localhost:8000/healthz"
-  echo "     docker logs zep"
+  echo "  ⚠  Zep não respondeu — verifique:"
+  echo "     curl http://localhost:8000/healthz  &&  docker logs zep"
+  echo ""
 fi
-echo ""
+if [ "$AGENT_OK" = "false" ]; then
+  echo "  ⚠  Agente Dr. João Holanda não subiu — verifique:"
+  echo "     docker logs joao_holanda_agent"
+  echo "     docker compose build joao_holanda"
+  echo ""
+fi
+
+if [ -f /root/automacao/qrcode.png ]; then
+  echo "  📱 QR Code salvo em: /root/automacao/qrcode.png"
+  echo "     Baixe com:  scp root@${VPS_IP}:/root/automacao/qrcode.png ."
+  echo ""
+fi
+
 echo "  Após escanear o QR Code, o Sr. Edilson pode enviar mensagem e"
 echo "  o Dr. João Holanda responderá com voz e memória longitudinal."
 echo ""

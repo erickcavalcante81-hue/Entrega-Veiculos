@@ -302,8 +302,6 @@ async def lifespan(app: FastAPI):
     logger.info("Evolution API: %s | Zep: %s", EVOLUTION_API_URL, ZEP_API_URL)
     # Inicializa memória do paciente no Zep
     try:
-        import sys
-        sys.path.insert(0, "/root/automacao")
         from integrations.zep_memory import initialize_patient_knowledge
         await initialize_patient_knowledge()
         logger.info("Conhecimento do Sr. Edilson carregado no Zep ✓")
@@ -426,7 +424,6 @@ async def add_fact(request: Request):
         raise HTTPException(status_code=400, detail="Campo 'fato' obrigatório")
 
     try:
-        sys_path_insert = __import__("sys"); sys_path_insert.path.insert(0, "/root/automacao")
         from integrations.zep_memory import add_clinical_fact
         ok = await add_clinical_fact(fact, category)
         return JSONResponse({"status": "ok" if ok else "falhou", "fato": fact})

@@ -147,8 +147,10 @@ services:
   # ──────────────────────────────────────────
   joao_holanda:
     build:
-      context: ../agents
-      dockerfile: Dockerfile
+      # Contexto = diretório do docker-compose.yml (/root/automacao na VPS),
+      # necessário para o Dockerfile acessar agents/ e integrations/.
+      context: .
+      dockerfile: agents/Dockerfile
     container_name: joao_holanda_agent
     restart: always
     ports:
