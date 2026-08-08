@@ -30,6 +30,7 @@ add_env "OPENAI_API_KEY"         ""
 add_env "NVIDIA_NIM_API_KEY"     ""
 add_env "NIM_CHAT_MODEL"         "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning"
 add_env "NIM_REASONING_BUDGET"   "4096"
+add_env "AGENT_HOST_PORT"        "3001"
 add_env "EDILSON_PHONE"          ""
 add_env "N8N_FAMILY_GROUP_WA_ID" ""
 
@@ -278,6 +279,27 @@ fi
 # ─── PASSO 8: Build e sobe o agente Dr. João Holanda ─────────────────────────
 echo ""
 echo "════ PASSO 8 — Build do agente Dr. João Holanda ════"
+
+# Escolhe uma porta livre no host. A porta interna do container continua
+# sendo 3000 — é por ela que a Evolution API fala com o agente na rede Docker.
+port_livre() {
+  ! (ss -ltn 2>/dev/null || netstat -ltn 2>/dev/null) | grep -q ":$1 "
+}
+if ! port_livre "$AGENT_HOST_PORT"; then
+  echo "  Porta $AGENT_HOST_PORT ocupada por:"
+  (ss -ltnp 2>/dev/null || netstat -ltnp 2>/dev/null) | grep ":$AGENT_HOST_PORT " | sed 's/^/    /'
+  for p in 3001 3002 3003 3010 8090; do
+    if port_livre "$p"; then
+      echo "  Usando porta $p no lugar."
+      sed -i "s/^AGENT_HOST_PORT=.*/AGENT_HOST_PORT=$p/" .env
+      AGENT_HOST_PORT=$p
+      break
+    fi
+  done
+fi
+export AGENT_HOST_PORT
+echo "  Porta do host: $AGENT_HOST_PORT → 3000 (container)"
+
 echo "  (pode demorar 2-3 min no primeiro build)"
 BUILD_LOG=$(docker compose build joao_holanda 2>&1)
 if echo "$BUILD_LOG" | grep -qiE 'ERROR|failed to (solve|compute)'; then
@@ -287,13 +309,18 @@ else
   echo "$BUILD_LOG" | tail -5 | sed 's/^/    /'
   echo "  Build OK ✓"
 fi
-docker compose up -d joao_holanda
+
+UP_LOG=$(docker compose up -d joao_holanda 2>&1)
+if echo "$UP_LOG" | grep -qiE 'error|failed'; then
+  echo "  ✗ FALHA AO SUBIR O CONTAINER:"
+  echo "$UP_LOG" | tail -10 | sed 's/^/    /'
+fi
 echo ""
 echo "  Aguardando agente inicializar..."
 AGENT_OK=false
 for i in $(seq 1 24); do
   HTTP=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 \
-    "http://localhost:3000/health" 2>/dev/null || echo "000")
+    "http://localhost:${AGENT_HOST_PORT}/health" 2>/dev/null || echo "000")
   if [ "$HTTP" = "200" ]; then
     echo "  Agente Dr. João Holanda OK! ✓"
     AGENT_OK=true
@@ -418,7 +445,7 @@ echo "╔═══════════════════════�
 echo "║  ✔  INSTALAÇÃO CONCLUÍDA                            ║"
 echo "╚══════════════════════════════════════════════════════╝"
 echo ""
-echo "  Dr. João Holanda Agent → http://${VPS_IP}:3000"
+echo "  Dr. João Holanda Agent → http://${VPS_IP}:${AGENT_HOST_PORT}"
 echo "  Zep (segundo cérebro)  → http://${VPS_IP}:8000"
 echo "  Evolution API           → http://${VPS_IP}:8080"
 echo "  n8n                     → http://${VPS_IP}:5678"

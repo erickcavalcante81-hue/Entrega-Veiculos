@@ -154,7 +154,10 @@ services:
     container_name: joao_holanda_agent
     restart: always
     ports:
-      - "3000:3000"
+      # A porta interna continua 3000 — é por ela que a Evolution API alcança
+      # o agente pela rede Docker (http://joao_holanda_agent:3000).
+      # A porta do host é configurável porque 3000 costuma estar ocupada.
+      - "${AGENT_HOST_PORT:-3001}:3000"
     environment:
       - EVOLUTION_API_URL=http://evolution_api:8080
       - EVOLUTION_API_KEY=${EVOLUTION_API_KEY}
