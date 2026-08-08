@@ -38,6 +38,21 @@ ELEVENLABS_VOICE_ID= os.getenv("ELEVENLABS_VOICE_ID", "")
 OPENAI_API_KEY     = os.getenv("OPENAI_API_KEY", "")
 VPS_IP             = os.getenv("VPS_IP", "localhost")
 
+# ─── Nvidia NIM (backend OpenAI-compatível para Whisper / transcrição) ─────────
+# NIM é preferido sobre OpenAI quando OPENAI_API_KEY não está configurado.
+NVIDIA_NIM_API_KEY  = os.getenv("NVIDIA_NIM_API_KEY", "")
+NVIDIA_NIM_BASE_URL = os.getenv("NVIDIA_NIM_BASE_URL", "https://integrate.api.nvidia.com/v1")
+
+# Resolve credenciais e endpoint de transcrição em tempo de inicialização
+_whisper_key   = OPENAI_API_KEY or NVIDIA_NIM_API_KEY
+_whisper_url   = (
+    "https://api.openai.com/v1" if OPENAI_API_KEY
+    else NVIDIA_NIM_BASE_URL   if NVIDIA_NIM_API_KEY
+    else ""
+)
+# whisper-1 = OpenAI  |  nvidia/canary-1b = NIM (ambos aceitam /audio/transcriptions)
+_whisper_model = "whisper-1" if OPENAI_API_KEY else "nvidia/canary-1b"
+
 # Número do Sr. Edilson (ou grupo familiar)
 EDILSON_PHONE      = os.getenv("EDILSON_PHONE", "")      # ex: 5592999999999
 FAMILY_GROUP_ID    = os.getenv("N8N_FAMILY_GROUP_WA_ID", "")
@@ -193,9 +208,12 @@ async def send_audio(to: str, audio_bytes: bytes) -> None:
 
 
 async def transcribe_audio_url(media_url: str) -> str:
-    """Baixa áudio da Evolution API e transcreve com Whisper."""
-    if not OPENAI_API_KEY:
-        return "[áudio — transcrição indisponível: OpenAI key não configurada]"
+    """
+    Baixa áudio da Evolution API e transcreve via Whisper.
+    Usa OpenAI ou Nvidia NIM (OpenAI-compatível) conforme disponibilidade.
+    """
+    if not _whisper_key:
+        return "[áudio — transcrição indisponível: configure OPENAI_API_KEY ou NVIDIA_NIM_API_KEY]"
     try:
         async with httpx.AsyncClient(timeout=30) as client:
             # Download do áudio via Evolution API
@@ -206,17 +224,17 @@ async def transcribe_audio_url(media_url: str) -> str:
             )
             audio_data = dl_resp.content
 
-            # Transcrição via Whisper
+            # Transcrição: whisper-1 (OpenAI) ou nvidia/canary-1b (NIM)
             files = {"file": ("audio.ogg", audio_data, "audio/ogg")}
-            data  = {"model": "whisper-1", "language": "pt"}
+            data  = {"model": _whisper_model, "language": "pt"}
             wh_resp = await client.post(
-                "https://api.openai.com/v1/audio/transcriptions",
-                headers={"Authorization": f"Bearer {OPENAI_API_KEY}"},
+                f"{_whisper_url}/audio/transcriptions",
+                headers={"Authorization": f"Bearer {_whisper_key}"},
                 files=files, data=data,
             )
             return wh_resp.json().get("text", "[transcrição vazia]")
     except Exception as e:
-        logger.warning("Whisper error: %s", e)
+        logger.warning("Whisper/NIM transcription error: %s", e)
         return "[áudio — erro na transcrição]"
 
 

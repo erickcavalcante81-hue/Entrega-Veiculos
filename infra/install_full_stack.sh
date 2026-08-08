@@ -27,6 +27,7 @@ add_env "ZEP_SESSION_ID"         "edilson_parintins_001"
 add_env "ELEVENLABS_API_KEY"     ""
 add_env "ELEVENLABS_VOICE_ID"    ""
 add_env "OPENAI_API_KEY"         ""
+add_env "NVIDIA_NIM_API_KEY"     ""
 add_env "EDILSON_PHONE"          ""
 add_env "N8N_FAMILY_GROUP_WA_ID" ""
 

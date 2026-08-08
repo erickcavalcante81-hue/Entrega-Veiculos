@@ -79,6 +79,7 @@ services:
 
   # ──────────────────────────────────────────
   # Zep — segundo cérebro / memória longitudinal
+  # Backend LLM: Nvidia NIM (OpenAI-compatível)
   # ──────────────────────────────────────────
   zep:
     image: ghcr.io/getzep/zep:latest
@@ -93,7 +94,13 @@ services:
       - ZEP_AUTH_SECRET=${ZEP_API_KEY}
       - ZEP_LOG_LEVEL=info
       - ZEP_MEMORY_MESSAGE_WINDOW=12
-      - ZEP_OPENAI_API_KEY=${OPENAI_API_KEY}
+      # Nvidia NIM como backend OpenAI-compatível para sumarização e extração de entidades
+      - ZEP_OPENAI_API_KEY=${NVIDIA_NIM_API_KEY}
+      - ZEP_LLM_OPENAI_ENDPOINT=https://integrate.api.nvidia.com/v1
+      - ZEP_LLM_MODEL=meta/llama-3.1-8b-instruct
+      # Variáveis padrão OpenAI SDK (Go e Python) para endpoint customizado
+      - OPENAI_API_KEY=${NVIDIA_NIM_API_KEY}
+      - OPENAI_API_BASE=https://integrate.api.nvidia.com/v1
     depends_on:
       postgres:
         condition: service_healthy
@@ -166,7 +173,9 @@ services:
       - ZEP_SESSION_ID=${ZEP_SESSION_ID}
       - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY}
       - ELEVENLABS_VOICE_ID=${ELEVENLABS_VOICE_ID}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      # Nvidia NIM para Whisper (transcrição de áudio) — OpenAI-compatível
+      - NVIDIA_NIM_API_KEY=${NVIDIA_NIM_API_KEY}
+      - NVIDIA_NIM_BASE_URL=https://integrate.api.nvidia.com/v1
       - VPS_IP=${VPS_IP}
       - EDILSON_PHONE=${EDILSON_PHONE}
       - N8N_FAMILY_GROUP_WA_ID=${N8N_FAMILY_GROUP_WA_ID}
