@@ -78,6 +78,29 @@ services:
       - automacao_net
 
   # ──────────────────────────────────────────
+  # Zep — segundo cérebro / memória longitudinal
+  # ──────────────────────────────────────────
+  zep:
+    image: ghcr.io/getzep/zep:latest
+    container_name: zep
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      - ZEP_STORE_TYPE=postgres
+      - ZEP_STORE_POSTGRES_DSN=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/zep?sslmode=disable
+      - ZEP_AUTH_REQUIRED=true
+      - ZEP_AUTH_SECRET=${ZEP_API_KEY}
+      - ZEP_LOG_LEVEL=info
+      - ZEP_MEMORY_MESSAGE_WINDOW=12
+      - ZEP_OPENAI_API_KEY=${OPENAI_API_KEY}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - automacao_net
+
+  # ──────────────────────────────────────────
   # Evolution API — gateway WhatsApp
   # ──────────────────────────────────────────
   evolution:
@@ -127,6 +150,7 @@ volumes:
   redis_data:
   n8n_data:
   evolution_instances:
+  zep_data:
 
 # ──────────────────────────────────────────
 # Rede interna isolada
