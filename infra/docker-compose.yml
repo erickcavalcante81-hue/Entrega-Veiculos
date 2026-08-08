@@ -4,7 +4,9 @@ services:
   # PostgreSQL 16 — banco de dados principal
   # ──────────────────────────────────────────
   postgres:
-    image: postgres:16-alpine
+    # pgvector/pgvector:pg16 = PostgreSQL 16 + extensão pgvector (exigida pelo Zep)
+    # Compatível com volumes criados por postgres:16-alpine (mesma major version)
+    image: pgvector/pgvector:pg16
     container_name: postgres
     restart: always
     environment:

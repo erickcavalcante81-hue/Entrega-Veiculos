@@ -36,12 +36,48 @@ echo "  .env atualizado."
 
 # ─── PASSO 2: Cria banco Zep no PostgreSQL ────────────────────────────────────
 echo ""
-echo "════ PASSO 2 — Criando banco de dados 'zep' ════"
-docker exec postgres psql -U "$POSTGRES_USER" -c \
-  "SELECT 'CREATE DATABASE zep' WHERE NOT EXISTS \
-   (SELECT FROM pg_database WHERE datname = 'zep')\gexec" 2>/dev/null \
-  && echo "  Banco 'zep' OK." \
-  || echo "  AVISO: criação do banco zep falhou (pode já existir)."
+echo "════ PASSO 2 — Criando banco de dados 'zep' + pgvector ════"
+
+# Verifica se a imagem atual do postgres suporta pgvector; se não, migra.
+PG_IMAGE=$(docker inspect --format='{{.Config.Image}}' postgres 2>/dev/null || echo "")
+if [[ "$PG_IMAGE" != *"pgvector"* ]]; then
+  echo "  Imagem atual ($PG_IMAGE) não tem pgvector. Migrando para pgvector/pgvector:pg16..."
+  docker compose pull postgres 2>&1 | tail -3
+  docker compose up -d --force-recreate postgres
+  echo "  Aguardando PostgreSQL ficar saudável..."
+  for i in $(seq 1 30); do
+    if docker exec postgres pg_isready -U "$POSTGRES_USER" >/dev/null 2>&1; then
+      echo "  PostgreSQL pronto ✓"; break
+    fi
+    echo "  Aguardando PostgreSQL... ($i/30)"; sleep 3
+  done
+fi
+
+# Cria o banco 'zep' — verificação e criação em comandos separados,
+# pois \gexec não funciona com psql -c.
+if docker exec postgres psql -U "$POSTGRES_USER" -tAc \
+     "SELECT 1 FROM pg_database WHERE datname='zep'" 2>/dev/null | grep -q 1; then
+  echo "  Banco 'zep' já existe ✓"
+else
+  if docker exec postgres psql -U "$POSTGRES_USER" -c "CREATE DATABASE zep" 2>&1; then
+    echo "  Banco 'zep' criado ✓"
+  else
+    echo "  ERRO: falha ao criar banco 'zep'. Zep não vai subir."
+  fi
+fi
+
+# Habilita a extensão pgvector dentro do banco zep
+if docker exec postgres psql -U "$POSTGRES_USER" -d zep \
+     -c "CREATE EXTENSION IF NOT EXISTS vector" 2>&1; then
+  echo "  Extensão pgvector habilitada ✓"
+else
+  echo "  ERRO: pgvector indisponível — verifique a imagem do PostgreSQL."
+fi
+
+# Confirmação final
+docker exec postgres psql -U "$POSTGRES_USER" -d zep -tAc \
+  "SELECT 'pgvector v' || extversion FROM pg_extension WHERE extname='vector'" 2>/dev/null \
+  | sed 's/^/  /' || true
 
 # ─── PASSO 3: Baixa arquivos do repositório ───────────────────────────────────
 echo ""
