@@ -34,54 +34,11 @@ add_env "N8N_FAMILY_GROUP_WA_ID" ""
 source .env
 echo "  .env atualizado."
 
-# ─── PASSO 2: Cria banco Zep no PostgreSQL ────────────────────────────────────
+# ─── PASSO 2: Baixa arquivos do repositório ───────────────────────────────────
+# IMPORTANTE: deve vir ANTES da migração do PostgreSQL, senão o
+# docker compose usaria o docker-compose.yml antigo (sem pgvector).
 echo ""
-echo "════ PASSO 2 — Criando banco de dados 'zep' + pgvector ════"
-
-# Verifica se a imagem atual do postgres suporta pgvector; se não, migra.
-PG_IMAGE=$(docker inspect --format='{{.Config.Image}}' postgres 2>/dev/null || echo "")
-if [[ "$PG_IMAGE" != *"pgvector"* ]]; then
-  echo "  Imagem atual ($PG_IMAGE) não tem pgvector. Migrando para pgvector/pgvector:pg16..."
-  docker compose pull postgres 2>&1 | tail -3
-  docker compose up -d --force-recreate postgres
-  echo "  Aguardando PostgreSQL ficar saudável..."
-  for i in $(seq 1 30); do
-    if docker exec postgres pg_isready -U "$POSTGRES_USER" >/dev/null 2>&1; then
-      echo "  PostgreSQL pronto ✓"; break
-    fi
-    echo "  Aguardando PostgreSQL... ($i/30)"; sleep 3
-  done
-fi
-
-# Cria o banco 'zep' — verificação e criação em comandos separados,
-# pois \gexec não funciona com psql -c.
-if docker exec postgres psql -U "$POSTGRES_USER" -tAc \
-     "SELECT 1 FROM pg_database WHERE datname='zep'" 2>/dev/null | grep -q 1; then
-  echo "  Banco 'zep' já existe ✓"
-else
-  if docker exec postgres psql -U "$POSTGRES_USER" -c "CREATE DATABASE zep" 2>&1; then
-    echo "  Banco 'zep' criado ✓"
-  else
-    echo "  ERRO: falha ao criar banco 'zep'. Zep não vai subir."
-  fi
-fi
-
-# Habilita a extensão pgvector dentro do banco zep
-if docker exec postgres psql -U "$POSTGRES_USER" -d zep \
-     -c "CREATE EXTENSION IF NOT EXISTS vector" 2>&1; then
-  echo "  Extensão pgvector habilitada ✓"
-else
-  echo "  ERRO: pgvector indisponível — verifique a imagem do PostgreSQL."
-fi
-
-# Confirmação final
-docker exec postgres psql -U "$POSTGRES_USER" -d zep -tAc \
-  "SELECT 'pgvector v' || extversion FROM pg_extension WHERE extname='vector'" 2>/dev/null \
-  | sed 's/^/  /' || true
-
-# ─── PASSO 3: Baixa arquivos do repositório ───────────────────────────────────
-echo ""
-echo "════ PASSO 3 — Baixando arquivos do repositório ════"
+echo "════ PASSO 2 — Baixando arquivos do repositório ════"
 BASE_URL="https://raw.githubusercontent.com/erickcavalcante81-hue/Home-Cabin-USA/claude/multimodal-health-ai-system-dEf2q"
 
 curl -fsSL "${BASE_URL}/infra/docker-compose.yml"              -o docker-compose.yml
@@ -97,6 +54,60 @@ curl -fsSL "${BASE_URL}/agents/Dockerfile"                     -o agents/Dockerf
 curl -fsSL "${BASE_URL}/agents/requirements.txt"               -o agents/requirements.txt
 curl -fsSL "${BASE_URL}/agents/dr_joao_holanda_prompt.md"      -o agents/dr_joao_holanda_prompt.md
 echo "  Arquivos do agente OK"
+
+# ─── PASSO 3: PostgreSQL com pgvector + banco 'zep' ───────────────────────────
+echo ""
+echo "════ PASSO 3 — PostgreSQL: pgvector + banco 'zep' ════"
+
+# O Zep exige a extensão pgvector, ausente na imagem postgres:16-alpine.
+PG_IMAGE=$(docker inspect --format='{{.Config.Image}}' postgres 2>/dev/null || echo "nenhuma")
+echo "  Imagem atual: $PG_IMAGE"
+if [[ "$PG_IMAGE" != *"pgvector"* ]]; then
+  echo "  Sem pgvector — migrando para pgvector/pgvector:pg16..."
+  docker compose pull postgres 2>&1 | tail -3
+  docker compose up -d --force-recreate postgres
+else
+  echo "  pgvector já presente na imagem ✓"
+fi
+
+echo "  Aguardando PostgreSQL aceitar conexões..."
+PG_READY=false
+for i in $(seq 1 40); do
+  if docker exec postgres pg_isready -U "$POSTGRES_USER" >/dev/null 2>&1; then
+    echo "  PostgreSQL pronto ✓ (tentativa $i)"; PG_READY=true; break
+  fi
+  sleep 3
+done
+
+if [ "$PG_READY" = "false" ]; then
+  echo "  ERRO: PostgreSQL não respondeu. Logs:"
+  docker logs --tail 20 postgres 2>&1 || true
+else
+  # Cria o banco 'zep' (\gexec não funciona com psql -c, por isso 2 comandos)
+  if docker exec postgres psql -U "$POSTGRES_USER" -tAc \
+       "SELECT 1 FROM pg_database WHERE datname='zep'" 2>/dev/null | grep -q 1; then
+    echo "  Banco 'zep' já existe ✓"
+  else
+    echo "  Criando banco 'zep'..."
+    docker exec postgres psql -U "$POSTGRES_USER" -c "CREATE DATABASE zep" 2>&1 | sed 's/^/    /'
+  fi
+
+  # Habilita pgvector dentro do banco zep
+  echo "  Habilitando extensão pgvector..."
+  docker exec postgres psql -U "$POSTGRES_USER" -d zep \
+    -c "CREATE EXTENSION IF NOT EXISTS vector" 2>&1 | sed 's/^/    /'
+
+  # Verificação final — falha aqui significa que o Zep não vai subir
+  PGV=$(docker exec postgres psql -U "$POSTGRES_USER" -d zep -tAc \
+    "SELECT extversion FROM pg_extension WHERE extname='vector'" 2>/dev/null | tr -d '[:space:]')
+  if [ -n "$PGV" ]; then
+    echo "  ✓ Banco 'zep' pronto com pgvector v${PGV}"
+  else
+    echo "  ✗ ERRO CRÍTICO: pgvector não habilitado no banco 'zep'."
+    echo "    O Zep não conseguirá iniciar. Bancos existentes:"
+    docker exec postgres psql -U "$POSTGRES_USER" -lqt 2>&1 | cut -d'|' -f1 | sed 's/^/      /'
+  fi
+fi
 
 # ─── PASSO 4: Instala dependências Python (antes de qualquer script Python) ───
 echo ""
@@ -202,9 +213,9 @@ if [ "$ZEP_OK" = "false" ]; then
   echo "  Continuando com instalação do agente (Zep pode ainda estar iniciando)."
 fi
 
-# ─── PASSO 6: Inicializa conhecimento do paciente no Zep ──────────────────────
+# ─── PASSO 7: Inicializa conhecimento do paciente no Zep ──────────────────────
 echo ""
-echo "════ PASSO 6 — Inicializando conhecimento do Sr. Edilson no Zep ════"
+echo "════ PASSO 7 — Inicializando conhecimento do Sr. Edilson no Zep ════"
 if [ "$ZEP_OK" = "true" ] && python3 -c "import httpx" 2>/dev/null; then
   python3 - <<PYEOF
 import asyncio, sys, os
@@ -233,9 +244,9 @@ else
   echo "    asyncio.run(initialize_patient_knowledge())\""
 fi
 
-# ─── PASSO 7: Build e sobe o agente Dr. João Holanda ─────────────────────────
+# ─── PASSO 8: Build e sobe o agente Dr. João Holanda ─────────────────────────
 echo ""
-echo "════ PASSO 7 — Build do agente Dr. João Holanda ════"
+echo "════ PASSO 8 — Build do agente Dr. João Holanda ════"
 echo "  (pode demorar 2-3 min no primeiro build)"
 docker compose build joao_holanda 2>&1 | tail -10
 docker compose up -d joao_holanda
@@ -257,9 +268,9 @@ if [ "$AGENT_OK" = "false" ]; then
   docker logs --tail 20 joao_holanda_agent 2>/dev/null || true
 fi
 
-# ─── PASSO 8: Configura webhook Evolution API → Agente ────────────────────────
+# ─── PASSO 9: Configura webhook Evolution API → Agente ────────────────────────
 echo ""
-echo "════ PASSO 8 — Configurando webhook Evolution API → Dr. João Holanda ════"
+echo "════ PASSO 9 — Configurando webhook Evolution API → Dr. João Holanda ════"
 
 # Aguarda Evolution API estar no ar (pode estar reiniciando)
 EVO_OK=false
@@ -289,9 +300,9 @@ else
   docker logs --tail 10 evolution_api 2>/dev/null || true
 fi
 
-# ─── PASSO 9: QR Code WhatsApp ────────────────────────────────────────────────
+# ─── PASSO 10: QR Code WhatsApp ────────────────────────────────────────────────
 echo ""
-echo "════ PASSO 9 — Gerando QR Code do WhatsApp ════"
+echo "════ PASSO 10 — Gerando QR Code do WhatsApp ════"
 
 if [ "$EVO_OK" = "true" ]; then
   # Cria instância se não existir
