@@ -24,6 +24,7 @@ add_env() {
 add_env "ZEP_API_KEY"            "zep_$(openssl rand -hex 32)"
 add_env "ZEP_API_URL"            "http://localhost:8000"
 add_env "ZEP_SESSION_ID"         "edilson_parintins_001"
+add_env "ANTHROPIC_API_KEY"      ""
 add_env "ELEVENLABS_API_KEY"     ""
 add_env "ELEVENLABS_VOICE_ID"    ""
 add_env "OPENAI_API_KEY"         ""
@@ -33,6 +34,14 @@ add_env "N8N_FAMILY_GROUP_WA_ID" ""
 
 source .env
 echo "  .env atualizado."
+
+# Avisa sobre chaves vazias que impedem o funcionamento do agente
+[ -z "${ANTHROPIC_API_KEY:-}" ] && \
+  echo "  ⚠  ANTHROPIC_API_KEY vazia — Dr. João Holanda não conseguirá responder."
+[ -z "${NVIDIA_NIM_API_KEY:-}" ] && \
+  echo "  ⚠  NVIDIA_NIM_API_KEY vazia — Zep e transcrição de áudio ficarão inativos."
+[ -z "${ELEVENLABS_API_KEY:-}" ] && \
+  echo "  ℹ  ELEVENLABS_API_KEY vazia — respostas serão em texto, não em áudio."
 
 # ─── PASSO 2: Baixa arquivos do repositório ───────────────────────────────────
 # IMPORTANTE: deve vir ANTES da migração do PostgreSQL, senão o
