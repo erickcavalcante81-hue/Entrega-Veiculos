@@ -55,23 +55,28 @@ O agente usa temas do cotidiano para criar vínculo e abertura emocional:
 WhatsApp (paciente/família)
         │
         ▼
-Evolution API / Twilio  ──►  n8n (orquestrador principal)
+Evolution API / Twilio  ──►  Agente Dr. João Holanda (FastAPI :3000)
                                      │
-              ┌──────────────────────┼──────────────────────┐
-              │                      │                      │
-         [Texto]               [Áudio .ogg]           [Imagem/PDF]
-              │                      │                      │
-              ▼                      ▼                      ▼
-       LLM (Nvidia NIM)      Whisper / Canary       GPT-4o Vision
-                              (transcrição)          Gemini 1.5 Pro
-                                      │              (análise exames
-                                      ▼               e refeições)
-                              LLM (Nvidia NIM)
-                                      │
-                    ┌─────────────────┼─────────────────┐
-                    │                 │                  │
-              Zep / Mem0       Google Sheets       Google Calendar
-            (memória temporal)  (histórico)        (agenda/alertas)
+              ┌──────────┬───────────┼───────────┬──────────┐
+              │          │           │           │          │
+         [Texto]   [Áudio .ogg]  [Imagem]    [Vídeo]  [PDF exame]
+              │          │           │           │          │
+              │     ffmpeg →         │           │          │
+              │     WAV 16kHz        │           │          │
+              │          │           │           │          │
+              └──────────┴───────────┼───────────┴──────────┘
+                                     ▼
+                    ╔════════════════════════════════════╗
+                    ║   Nemotron 3 Nano Omni (NIM)       ║
+                    ║   motor ÚNICO — uma inferência:    ║
+                    ║   texto · áudio · imagem · vídeo   ║
+                    ║   30B-A3B MoE · contexto 256K      ║
+                    ╚════════════════════════════════════╝
+                                     │
+                    ┌────────────────┼────────────────┐
+                    │                │                │
+              Zep (memória)   Google Sheets   Google Calendar
+            (grafo temporal)   (histórico)    (agenda/alertas)
                     │
                     ▼
              ElevenLabs (TTS)
@@ -87,9 +92,9 @@ Evolution API / Twilio  ──►  n8n (orquestrador principal)
 | Mensageria | WhatsApp Business API | Canal principal (texto, áudio, imagem, PDF) |
 | Gateway WA | Evolution API (self-hosted) ou Twilio | Webhook de entrada/saída |
 | Orquestrador | **n8n** | Fluxos, condicionais, agendamentos (cron) |
-| STT | **OpenAI Whisper** (API) | Transcrição de áudios .ogg → texto |
-| LLM Principal | **Nvidia NIM** — `meta/llama-3.3-70b-instruct` | Raciocínio clínico, resposta principal |
-| LLM Visão | **GPT-4o Vision** / **Gemini 1.5 Pro** | Leitura de PDFs de exames, análise de fotos de refeições |
+| STT | **Nemotron Omni** (encoder Parakeet-TDT integrado) | Transcrição de áudios .ogg → texto, via ffmpeg → WAV 16 kHz |
+| LLM Principal | **Nvidia NIM** — `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning` | Motor único multimodal: raciocínio clínico, leitura de exames (imagem/PDF), análise de refeições, vídeo e nota de voz |
+| LLM Visão | **Nemotron Omni** (encoder C-RADIOv4-H integrado) | Leitura de PDFs de exames, fotos de refeições e vídeo |
 | TTS | **ElevenLabs** | Geração de áudio de resposta (voz Dr. João Holanda) |
 | Memória | **Zep** (grafo temporal) ou **Mem0** | Histórico longitudinal; lembra evolução de exames e queixas |
 | Banco estruturado | **Google Sheets** | Tabelas de exames, medicamentos, peso, humor |
@@ -181,7 +186,8 @@ OPENAI_API_KEY=
 # API compatível com o formato OpenAI. Chave em build.nvidia.com
 NVIDIA_NIM_API_KEY=
 NVIDIA_NIM_BASE_URL=https://integrate.api.nvidia.com/v1
-NIM_CHAT_MODEL=meta/llama-3.3-70b-instruct
+NIM_CHAT_MODEL=nvidia/nemotron-3-nano-omni-30b-a3b-reasoning
+NIM_REASONING_BUDGET=4096
 
 # ElevenLabs
 ELEVENLABS_API_KEY=

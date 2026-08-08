@@ -36,23 +36,18 @@ ELEVENLABS_VOICE_ID= os.getenv("ELEVENLABS_VOICE_ID", "")
 OPENAI_API_KEY     = os.getenv("OPENAI_API_KEY", "")
 VPS_IP             = os.getenv("VPS_IP", "localhost")
 
-# ─── Nvidia NIM — motor único do ecossistema ──────────────────────────────────
-# A API do NIM é compatível com o formato OpenAI, então a mesma chave atende
-# raciocínio clínico (chat), memória do Zep e transcrição de áudio.
+# ─── Nvidia NIM — motor único multimodal do ecossistema ───────────────────────
+# Nemotron 3 Nano Omni aceita texto, imagem, vídeo e áudio numa mesma chamada,
+# devolvendo texto. Substitui, sozinho: LLM de raciocínio, Whisper (transcrição
+# de áudio do WhatsApp) e o modelo de visão (PDFs de exames e fotos de refeição).
+# Arquitetura: Mamba-Transformer MoE 30B (3B ativos) + encoder de visão
+# C-RADIOv4-H + encoder de áudio Parakeet-TDT. Janela de contexto: 256K tokens.
 NVIDIA_NIM_API_KEY  = os.getenv("NVIDIA_NIM_API_KEY", "")
 NVIDIA_NIM_BASE_URL = os.getenv("NVIDIA_NIM_BASE_URL", "https://integrate.api.nvidia.com/v1")
-# Modelo de raciocínio do Dr. João Holanda (bom desempenho em português)
-NIM_CHAT_MODEL      = os.getenv("NIM_CHAT_MODEL", "meta/llama-3.3-70b-instruct")
-
-# Resolve credenciais e endpoint de transcrição em tempo de inicialização
-_whisper_key   = OPENAI_API_KEY or NVIDIA_NIM_API_KEY
-_whisper_url   = (
-    "https://api.openai.com/v1" if OPENAI_API_KEY
-    else NVIDIA_NIM_BASE_URL   if NVIDIA_NIM_API_KEY
-    else ""
-)
-# whisper-1 = OpenAI  |  nvidia/canary-1b = NIM (ambos aceitam /audio/transcriptions)
-_whisper_model = "whisper-1" if OPENAI_API_KEY else "nvidia/canary-1b"
+NIM_CHAT_MODEL      = os.getenv("NIM_CHAT_MODEL",
+                                "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning")
+# Orçamento de raciocínio interno (tokens). 0 desativa o modo reasoning.
+NIM_REASONING_BUDGET = int(os.getenv("NIM_REASONING_BUDGET", "4096"))
 
 # Número do Sr. Edilson (ou grupo familiar)
 EDILSON_PHONE      = os.getenv("EDILSON_PHONE", "")      # ex: 5592999999999
@@ -147,36 +142,82 @@ async def zep_save(patient_msg: str, agent_response: str, metadata: dict = None)
         logger.warning("Zep save error: %s", e)
 
 
-# ─── Nvidia NIM — raciocínio clínico ──────────────────────────────────────────
-async def ask_dr_joao(message: str, memoria: str) -> str:
+# ─── Nvidia NIM — motor multimodal ────────────────────────────────────────────
+# Mapeia o mimetype da mídia para o tipo de conteúdo esperado pela API do Omni.
+MEDIA_PART_TYPES = {
+    "audio": "audio_url",
+    "image": "image_url",
+    "video": "video_url",
+}
+
+
+def build_media_part(kind: str, data: bytes, mime: str) -> dict:
     """
-    Gera a resposta do Dr. João Holanda via Nvidia NIM (API compatível OpenAI),
-    combinando o system prompt da persona com o contexto recuperado do Zep.
+    Monta um bloco de conteúdo multimodal no formato data URI base64.
+    kind: 'audio' | 'image' | 'video'
+    """
+    key = MEDIA_PART_TYPES[kind]
+    b64 = base64.b64encode(data).decode()
+    return {"type": key, key: {"url": f"data:{mime};base64,{b64}"}}
+
+
+async def call_nim(messages: list[dict], max_tokens: int = 1024,
+                   temperature: float = 0.6, reasoning: bool = True,
+                   media_io: dict | None = None) -> str:
+    """
+    Chamada genérica ao Nemotron Omni via API compatível com OpenAI.
+    Retorna apenas o conteúdo final — o rascunho de raciocínio (campo
+    'reasoning') é descartado, pois não deve chegar ao Sr. Edilson.
     """
     if not NVIDIA_NIM_API_KEY:
         raise RuntimeError("NVIDIA_NIM_API_KEY não configurada")
 
-    system = SYSTEM_PROMPT.replace("{memoria_zep}", memoria)
+    payload: dict[str, Any] = {
+        "model": NIM_CHAT_MODEL,
+        "messages": messages,
+        "max_tokens": max_tokens,
+        "temperature": temperature,
+        "top_p": 0.9,
+    }
+    if reasoning and NIM_REASONING_BUDGET > 0:
+        payload["reasoning_budget"] = NIM_REASONING_BUDGET
+    if media_io:
+        # Controla amostragem de vídeo (fps / num_frames) na inferência
+        payload["media_io_kwargs"] = media_io
 
-    async with httpx.AsyncClient(timeout=60) as client:
+    # Mídia em base64 deixa o corpo grande; timeout generoso para vídeo/áudio longo
+    async with httpx.AsyncClient(timeout=180) as client:
         resp = await client.post(
             f"{NVIDIA_NIM_BASE_URL}/chat/completions",
             headers={"Authorization": f"Bearer {NVIDIA_NIM_API_KEY}",
                      "Content-Type": "application/json"},
-            json={
-                "model": NIM_CHAT_MODEL,
-                "messages": [
-                    {"role": "system", "content": system},
-                    {"role": "user",   "content": message},
-                ],
-                "max_tokens": 1024,
-                "temperature": 0.6,   # equilíbrio entre acolhimento e consistência clínica
-                "top_p": 0.9,
-            },
+            json=payload,
         )
         if resp.status_code != 200:
-            raise RuntimeError(f"NIM HTTP {resp.status_code}: {resp.text[:200]}")
+            raise RuntimeError(f"NIM HTTP {resp.status_code}: {resp.text[:300]}")
         return resp.json()["choices"][0]["message"]["content"].strip()
+
+
+async def ask_dr_joao(message: str, memoria: str,
+                      media_parts: list[dict] | None = None) -> str:
+    """
+    Gera a resposta do Dr. João Holanda, combinando o system prompt da persona,
+    o contexto recuperado do Zep e — quando houver — imagem, vídeo ou áudio
+    enviados pelo Sr. Edilson, tudo numa única inferência do Nemotron Omni.
+    """
+    system = SYSTEM_PROMPT.replace("{memoria_zep}", memoria)
+
+    # Sem mídia, o conteúdo é texto puro; com mídia, vira lista de blocos
+    if media_parts:
+        content: Any = [{"type": "text", "text": message}] + media_parts
+    else:
+        content = message
+
+    return await call_nim(
+        [{"role": "system", "content": system},
+         {"role": "user",   "content": content}],
+        max_tokens=1024,
+    )
 
 
 # ─── ElevenLabs TTS ───────────────────────────────────────────────────────────
@@ -227,42 +268,82 @@ async def send_audio(to: str, audio_bytes: bytes) -> None:
         )
 
 
-async def transcribe_audio_url(media_url: str) -> str:
-    """
-    Baixa áudio da Evolution API e transcreve via Whisper.
-    Usa OpenAI ou Nvidia NIM (OpenAI-compatível) conforme disponibilidade.
-    """
-    if not _whisper_key:
-        return "[áudio — transcrição indisponível: configure OPENAI_API_KEY ou NVIDIA_NIM_API_KEY]"
+async def download_media(media_url: str) -> bytes | None:
+    """Baixa mídia (áudio, imagem, vídeo, PDF) através da Evolution API."""
     try:
-        async with httpx.AsyncClient(timeout=30) as client:
-            # Download do áudio via Evolution API
-            dl_resp = await client.post(
+        async with httpx.AsyncClient(timeout=60) as client:
+            resp = await client.post(
                 f"{EVOLUTION_API_URL}/message/downloadMedia/{WHATSAPP_INSTANCE}",
                 headers={"apikey": EVOLUTION_API_KEY, "Content-Type": "application/json"},
                 json={"url": media_url},
             )
-            audio_data = dl_resp.content
-
-            # Transcrição: whisper-1 (OpenAI) ou nvidia/canary-1b (NIM)
-            files = {"file": ("audio.ogg", audio_data, "audio/ogg")}
-            data  = {"model": _whisper_model, "language": "pt"}
-            wh_resp = await client.post(
-                f"{_whisper_url}/audio/transcriptions",
-                headers={"Authorization": f"Bearer {_whisper_key}"},
-                files=files, data=data,
-            )
-            return wh_resp.json().get("text", "[transcrição vazia]")
+            if resp.status_code != 200 or not resp.content:
+                logger.warning("Download de mídia falhou: HTTP %s", resp.status_code)
+                return None
+            return resp.content
     except Exception as e:
-        logger.warning("Whisper/NIM transcription error: %s", e)
+        logger.warning("Erro no download de mídia: %s", e)
+        return None
+
+
+async def ogg_to_wav(audio_data: bytes) -> bytes | None:
+    """
+    Converte o áudio OGG/Opus do WhatsApp para WAV 16 kHz mono, formato
+    aceito pelo encoder de áudio do Nemotron Omni.
+    Processado inteiramente em memória — nada é gravado em disco.
+    """
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "ffmpeg", "-hide_banner", "-loglevel", "error",
+            "-i", "pipe:0",           # entrada via stdin
+            "-ar", "16000",           # 16 kHz
+            "-ac", "1",               # mono
+            "-f", "wav", "pipe:1",    # saída via stdout
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        out, err = await proc.communicate(input=audio_data)
+        if proc.returncode != 0:
+            logger.warning("ffmpeg falhou: %s", err.decode()[:200])
+            return None
+        return out
+    except Exception as e:
+        logger.warning("Erro na conversão de áudio: %s", e)
+        return None
+
+
+async def transcribe_audio(audio_data: bytes) -> str:
+    """
+    Transcreve a nota de voz do Sr. Edilson usando o próprio Nemotron Omni.
+    A transcrição alimenta a memória do Zep — o áudio original também segue
+    para a inferência principal, preservando tom de voz e emoção.
+    """
+    wav = await ogg_to_wav(audio_data)
+    if not wav:
+        return "[áudio — falha na conversão]"
+    try:
+        part = build_media_part("audio", wav, "audio/wav")
+        return await call_nim(
+            [{"role": "user", "content": [
+                {"type": "text", "text": "Transcreva este áudio em português "
+                                         "brasileiro. Responda apenas com a "
+                                         "transcrição, sem comentários."},
+                part,
+            ]}],
+            max_tokens=512, temperature=0.1, reasoning=False,
+        )
+    except Exception as e:
+        logger.warning("Erro na transcrição via Omni: %s", e)
         return "[áudio — erro na transcrição]"
 
 
 # ─── Processamento principal ──────────────────────────────────────────────────
 async def process_message(from_number: str, message_text: str,
-                           message_type: str = "text") -> None:
+                           message_type: str = "text",
+                           media_parts: list[dict] | None = None) -> None:
     """
-    Pipeline completo: memória → Claude → ElevenLabs → WhatsApp.
+    Pipeline completo: memória → Nemotron Omni → ElevenLabs → WhatsApp.
     Executado em background para resposta rápida ao webhook.
     """
     logger.info("Mensagem de %s [%s]: %s", from_number, message_type,
@@ -271,11 +352,11 @@ async def process_message(from_number: str, message_text: str,
     # 1. Recupera contexto do Zep
     memoria = await zep_get_context()
 
-    # 2. Gera resposta do Dr. João Holanda
+    # 2. Gera resposta do Dr. João Holanda (texto + mídia na mesma inferência)
     try:
-        resposta = await ask_dr_joao(message_text, memoria)
+        resposta = await ask_dr_joao(message_text, memoria, media_parts)
     except Exception as e:
-        logger.error("Claude error: %s", e)
+        logger.error("Erro na inferência NIM: %s", e)
         resposta = ("Desculpe Sr. Edilson, tive uma dificuldade técnica agora. "
                     "Pode me repetir o que disse?")
 
@@ -289,6 +370,10 @@ async def process_message(from_number: str, message_text: str,
     # 4. Salva interação no Zep para aprendizado
     await zep_save(message_text, resposta, {"de": from_number, "tipo": message_type})
 
+    # 5. Rastreia marcadores na resposta — em exames enviados como imagem ou PDF
+    #    os valores só aparecem depois que o modelo lê o documento.
+    await check_clinical_alerts(resposta, from_number)
+
     logger.info("Resposta enviada para %s (%d chars)", from_number, len(resposta))
 
 
@@ -296,23 +381,35 @@ async def process_message(from_number: str, message_text: str,
 PSA_PATTERN   = re.compile(r'PSA[:\s]+(\d+[\.,]\d+)', re.IGNORECASE)
 ETFG_PATTERN  = re.compile(r'eTFG[:\s]+(\d+)', re.IGNORECASE)
 
+# Evita alertar a família duas vezes pelo mesmo valor: a checagem roda tanto
+# na mensagem recebida quanto na resposta (exames em imagem/PDF).
+_alertas_enviados: set[str] = set()
+
+
 async def check_clinical_alerts(text: str, from_number: str) -> None:
     """Detecta valores críticos de PSA/eTFG e notifica família se necessário."""
+    if not FAMILY_GROUP_ID:
+        return
+
     if m := PSA_PATTERN.search(text):
         psa = float(m.group(1).replace(",", "."))
-        if psa > 0.20 and FAMILY_GROUP_ID:
-            alerta = (f"🚨 ALERTA MÉDICO — Sr. Edilson\n"
-                      f"PSA: {psa} (acima do limite de 0,20)\n"
-                      f"Dr. João Holanda recomenda contato urgente com urologista.")
-            await send_text(FAMILY_GROUP_ID, alerta)
+        chave = f"psa:{psa}"
+        if psa > 0.20 and chave not in _alertas_enviados:
+            _alertas_enviados.add(chave)
+            await send_text(FAMILY_GROUP_ID,
+                            f"🚨 ALERTA MÉDICO — Sr. Edilson\n"
+                            f"PSA: {psa} (acima do limite de 0,20)\n"
+                            f"Dr. João Holanda recomenda contato urgente com urologista.")
 
     if m := ETFG_PATTERN.search(text):
         etfg = int(m.group(1))
-        if etfg < 30 and FAMILY_GROUP_ID:
-            alerta = (f"🚨 ALERTA RENAL — Sr. Edilson\n"
-                      f"eTFG: {etfg} (estadiamento grave)\n"
-                      f"Dr. João Holanda recomenda contato urgente com nefrologista.")
-            await send_text(FAMILY_GROUP_ID, alerta)
+        chave = f"etfg:{etfg}"
+        if etfg < 30 and chave not in _alertas_enviados:
+            _alertas_enviados.add(chave)
+            await send_text(FAMILY_GROUP_ID,
+                            f"🚨 ALERTA RENAL — Sr. Edilson\n"
+                            f"eTFG: {etfg} (estadiamento grave)\n"
+                            f"Dr. João Holanda recomenda contato urgente com nefrologista.")
 
 
 # ─── FastAPI app ──────────────────────────────────────────────────────────────
@@ -376,6 +473,7 @@ async def whatsapp_webhook(request: Request):
     message_obj = msg.get("message", {})
     message_type = "text"
     message_text = ""
+    media_parts: list[dict] = []
 
     # Texto simples
     if "conversation" in message_obj:
@@ -383,21 +481,71 @@ async def whatsapp_webhook(request: Request):
     elif "extendedTextMessage" in message_obj:
         message_text = message_obj["extendedTextMessage"].get("text", "")
 
-    # Áudio (PTT / nota de voz)
+    # Áudio (PTT / nota de voz) — transcrito E enviado ao modelo,
+    # para que o tom de voz também informe a leitura emocional
     elif "audioMessage" in message_obj or "pttMessage" in message_obj:
         message_type = "audio"
-        audio_url = (message_obj.get("audioMessage") or
-                     message_obj.get("pttMessage", {})).get("url", "")
-        message_text = await transcribe_audio_url(audio_url)
+        audio_msg = message_obj.get("audioMessage") or message_obj.get("pttMessage", {})
+        raw = await download_media(audio_msg.get("url", ""))
+        if not raw:
+            return JSONResponse({"status": "media_download_failed"})
+
+        message_text = await transcribe_audio(raw)
         logger.info("Áudio transcrito: %s", message_text[:80])
 
-    # Imagem/PDF — análise nutricional ou de exames
-    elif "imageMessage" in message_obj or "documentMessage" in message_obj:
-        message_type = "media"
-        caption = (message_obj.get("imageMessage") or
-                   message_obj.get("documentMessage", {})).get("caption", "")
-        message_text = (f"[O Sr. Edilson enviou uma {'imagem' if 'imageMessage' in message_obj else 'documento'}]"
-                        f"{' com legenda: ' + caption if caption else ''}")
+        wav = await ogg_to_wav(raw)
+        if wav:
+            media_parts.append(build_media_part("audio", wav, "audio/wav"))
+
+    # Imagem — foto de refeição ou de exame impresso
+    elif "imageMessage" in message_obj:
+        message_type = "image"
+        img = message_obj["imageMessage"]
+        caption = img.get("caption", "")
+        raw = await download_media(img.get("url", ""))
+        if not raw:
+            return JSONResponse({"status": "media_download_failed"})
+
+        mime = img.get("mimetype", "image/jpeg").split(";")[0]
+        media_parts.append(build_media_part("image", raw, mime))
+        message_text = (f"O Sr. Edilson enviou uma foto"
+                        f"{' com a legenda: ' + caption if caption else ''}. "
+                        f"Analise a imagem: se for uma refeição, avalie do ponto de "
+                        f"vista nutricional considerando as restrições renais e "
+                        f"oncológicas dele; se for um exame, leia os valores e "
+                        f"interprete-os.")
+
+    # Vídeo — o Omni analisa os quadros diretamente
+    elif "videoMessage" in message_obj:
+        message_type = "video"
+        vid = message_obj["videoMessage"]
+        caption = vid.get("caption", "")
+        raw = await download_media(vid.get("url", ""))
+        if not raw:
+            return JSONResponse({"status": "media_download_failed"})
+
+        mime = vid.get("mimetype", "video/mp4").split(";")[0]
+        media_parts.append(build_media_part("video", raw, mime))
+        message_text = (f"O Sr. Edilson enviou um vídeo"
+                        f"{' com a legenda: ' + caption if caption else ''}. "
+                        f"Observe o que acontece e comente com acolhimento.")
+
+    # Documento — PDFs de exames são convertidos em imagem pela Evolution API
+    elif "documentMessage" in message_obj:
+        message_type = "document"
+        doc = message_obj["documentMessage"]
+        caption = doc.get("caption", "") or doc.get("fileName", "")
+        raw = await download_media(doc.get("url", ""))
+        if not raw:
+            return JSONResponse({"status": "media_download_failed"})
+
+        mime = doc.get("mimetype", "application/pdf").split(";")[0]
+        # O Omni lê PDF e imagem pelo mesmo canal visual
+        media_parts.append(build_media_part("image", raw, mime))
+        message_text = (f"O Sr. Edilson enviou o documento '{caption}'. "
+                        f"Leia o conteúdo. Se for um exame laboratorial, extraia "
+                        f"os marcadores (PSA, eTFG, creatinina) com seus valores e "
+                        f"interprete-os segundo as regras clínicas.")
     else:
         return JSONResponse({"status": "unsupported_type"})
 
@@ -408,7 +556,8 @@ async def whatsapp_webhook(request: Request):
     asyncio.create_task(check_clinical_alerts(message_text, from_number))
 
     # Processa em background (resposta imediata ao webhook)
-    asyncio.create_task(process_message(from_number, message_text, message_type))
+    asyncio.create_task(
+        process_message(from_number, message_text, message_type, media_parts))
 
     return JSONResponse({"status": "processing"})
 
