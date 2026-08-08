@@ -46,14 +46,32 @@ echo "  docker-compose.yml OK"
 
 mkdir -p integrations agents
 curl -fsSL "${BASE_URL}/integrations/zep_memory.py"            -o integrations/zep_memory.py
-touch integrations/__init__.py
+curl -fsSL "${BASE_URL}/integrations/__init__.py"              -o integrations/__init__.py \
+  || touch integrations/__init__.py
 echo "  zep_memory.py OK"
+
+# Verifica que todos os arquivos necessários ao build chegaram
+MISSING=""
+for f in agents/Dockerfile agents/requirements.txt agents/joao_holanda_service.py \
+         integrations/zep_memory.py integrations/__init__.py; do
+  [ -s "$f" ] || MISSING="$MISSING $f"
+done
 
 curl -fsSL "${BASE_URL}/agents/joao_holanda_service.py"        -o agents/joao_holanda_service.py
 curl -fsSL "${BASE_URL}/agents/Dockerfile"                     -o agents/Dockerfile
 curl -fsSL "${BASE_URL}/agents/requirements.txt"               -o agents/requirements.txt
 curl -fsSL "${BASE_URL}/agents/dr_joao_holanda_prompt.md"      -o agents/dr_joao_holanda_prompt.md
-echo "  Arquivos do agente OK"
+
+if [ -n "$MISSING" ]; then
+  echo "  ✗ ERRO: arquivos ausentes ou vazios:$MISSING"
+  echo "    O build do agente vai falhar. Verifique a conexão com o GitHub."
+else
+  echo "  Arquivos do agente OK ✓ (todos verificados)"
+fi
+
+# Espaço em disco — build do agente precisa de ~1,5 GB
+echo "  Espaço livre em disco:"
+df -h / | tail -1 | sed 's/^/    /'
 
 # ─── PASSO 3: PostgreSQL com pgvector + banco 'zep' ───────────────────────────
 echo ""
