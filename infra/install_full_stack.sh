@@ -55,32 +55,48 @@ echo ""
 echo "════ PASSO 2 — Baixando arquivos do repositório ════"
 BASE_URL="https://raw.githubusercontent.com/erickcavalcante81-hue/Home-Cabin-USA/claude/multimodal-health-ai-system-dEf2q"
 
-curl -fsSL "${BASE_URL}/infra/docker-compose.yml"              -o docker-compose.yml
+# O CDN do raw.githubusercontent cacheia por alguns minutos e serviria
+# versões antigas. Cabeçalhos no-cache + parâmetro único contornam isso.
+CB="$(date +%s)$$"
+fetch() {
+  curl -fsSL -H 'Cache-Control: no-cache, no-store' -H 'Pragma: no-cache' \
+    "${BASE_URL}/$1?cb=${CB}" -o "$2"
+}
+
+fetch "infra/docker-compose.yml"          docker-compose.yml
 echo "  docker-compose.yml OK"
 
 mkdir -p integrations agents
-curl -fsSL "${BASE_URL}/integrations/zep_memory.py"            -o integrations/zep_memory.py
-curl -fsSL "${BASE_URL}/integrations/__init__.py"              -o integrations/__init__.py \
-  || touch integrations/__init__.py
+fetch "integrations/zep_memory.py"        integrations/zep_memory.py
+fetch "integrations/__init__.py"          integrations/__init__.py || touch integrations/__init__.py
 echo "  zep_memory.py OK"
+
+fetch "agents/joao_holanda_service.py"    agents/joao_holanda_service.py
+fetch "agents/Dockerfile"                 agents/Dockerfile
+fetch "agents/requirements.txt"           agents/requirements.txt
+fetch "agents/dr_joao_holanda_prompt.md"  agents/dr_joao_holanda_prompt.md
 
 # Verifica que todos os arquivos necessários ao build chegaram
 MISSING=""
-for f in agents/Dockerfile agents/requirements.txt agents/joao_holanda_service.py \
-         integrations/zep_memory.py integrations/__init__.py; do
+for f in docker-compose.yml agents/Dockerfile agents/requirements.txt \
+         agents/joao_holanda_service.py integrations/zep_memory.py; do
   [ -s "$f" ] || MISSING="$MISSING $f"
 done
-
-curl -fsSL "${BASE_URL}/agents/joao_holanda_service.py"        -o agents/joao_holanda_service.py
-curl -fsSL "${BASE_URL}/agents/Dockerfile"                     -o agents/Dockerfile
-curl -fsSL "${BASE_URL}/agents/requirements.txt"               -o agents/requirements.txt
-curl -fsSL "${BASE_URL}/agents/dr_joao_holanda_prompt.md"      -o agents/dr_joao_holanda_prompt.md
-
 if [ -n "$MISSING" ]; then
   echo "  ✗ ERRO: arquivos ausentes ou vazios:$MISSING"
   echo "    O build do agente vai falhar. Verifique a conexão com o GitHub."
 else
   echo "  Arquivos do agente OK ✓ (todos verificados)"
+fi
+
+# Confirma que o compose baixado é a versão nova, e não um cache do CDN
+if grep -q 'AGENT_HOST_PORT' docker-compose.yml; then
+  echo "  docker-compose.yml atualizado ✓ (porta do agente configurável)"
+else
+  echo "  ⚠  docker-compose.yml veio do cache do CDN (versão antiga)."
+  echo "     Corrigindo a porta do agente localmente..."
+  sed -i 's|^\( *\)- "3000:3000"|\1- "${AGENT_HOST_PORT:-3001}:3000"|' docker-compose.yml
+  grep -n 'AGENT_HOST_PORT\|3000:3000' docker-compose.yml | sed 's/^/     /'
 fi
 
 # Espaço em disco — build do agente precisa de ~1,5 GB
