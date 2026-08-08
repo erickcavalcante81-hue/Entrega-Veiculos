@@ -156,7 +156,6 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - EVOLUTION_API_URL=http://evolution_api:8080
       - EVOLUTION_API_KEY=${EVOLUTION_API_KEY}
       - WHATSAPP_INSTANCE_NAME=edilson
@@ -165,9 +164,10 @@ services:
       - ZEP_SESSION_ID=${ZEP_SESSION_ID}
       - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY}
       - ELEVENLABS_VOICE_ID=${ELEVENLABS_VOICE_ID}
-      # Nvidia NIM para Whisper (transcrição de áudio) — OpenAI-compatível
+      # Nvidia NIM — motor único: raciocínio clínico + transcrição de áudio
       - NVIDIA_NIM_API_KEY=${NVIDIA_NIM_API_KEY}
       - NVIDIA_NIM_BASE_URL=https://integrate.api.nvidia.com/v1
+      - NIM_CHAT_MODEL=${NIM_CHAT_MODEL:-meta/llama-3.3-70b-instruct}
       - VPS_IP=${VPS_IP}
       - EDILSON_PHONE=${EDILSON_PHONE}
       - N8N_FAMILY_GROUP_WA_ID=${N8N_FAMILY_GROUP_WA_ID}

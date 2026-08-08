@@ -62,11 +62,11 @@ Evolution API / Twilio  ──►  n8n (orquestrador principal)
          [Texto]               [Áudio .ogg]           [Imagem/PDF]
               │                      │                      │
               ▼                      ▼                      ▼
-       LLM (Claude/GPT-4o)   OpenAI Whisper         GPT-4o Vision
+       LLM (Nvidia NIM)      Whisper / Canary       GPT-4o Vision
                               (transcrição)          Gemini 1.5 Pro
                                       │              (análise exames
                                       ▼               e refeições)
-                              LLM (Claude/GPT-4o)
+                              LLM (Nvidia NIM)
                                       │
                     ┌─────────────────┼─────────────────┐
                     │                 │                  │
@@ -88,7 +88,7 @@ Evolution API / Twilio  ──►  n8n (orquestrador principal)
 | Gateway WA | Evolution API (self-hosted) ou Twilio | Webhook de entrada/saída |
 | Orquestrador | **n8n** | Fluxos, condicionais, agendamentos (cron) |
 | STT | **OpenAI Whisper** (API) | Transcrição de áudios .ogg → texto |
-| LLM Principal | **Claude Sonnet 4.6** (Anthropic API) | Raciocínio clínico, resposta principal |
+| LLM Principal | **Nvidia NIM** — `meta/llama-3.3-70b-instruct` | Raciocínio clínico, resposta principal |
 | LLM Visão | **GPT-4o Vision** / **Gemini 1.5 Pro** | Leitura de PDFs de exames, análise de fotos de refeições |
 | TTS | **ElevenLabs** | Geração de áudio de resposta (voz Dr. João Holanda) |
 | Memória | **Zep** (grafo temporal) ou **Mem0** | Histórico longitudinal; lembra evolução de exames e queixas |
@@ -177,8 +177,11 @@ WHATSAPP_INSTANCE_NAME=
 # OpenAI
 OPENAI_API_KEY=
 
-# Anthropic (Claude)
-ANTHROPIC_API_KEY=
+# Nvidia NIM — motor único (raciocínio clínico, memória Zep, transcrição)
+# API compatível com o formato OpenAI. Chave em build.nvidia.com
+NVIDIA_NIM_API_KEY=
+NVIDIA_NIM_BASE_URL=https://integrate.api.nvidia.com/v1
+NIM_CHAT_MODEL=meta/llama-3.3-70b-instruct
 
 # ElevenLabs
 ELEVENLABS_API_KEY=

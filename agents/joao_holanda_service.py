@@ -1,7 +1,7 @@
 """
 joao_holanda_service.py — Serviço agente Dr. João Holanda Cavalcante
 Microserviço FastAPI que recebe webhooks da Evolution API, processa com
-Claude + Zep e responde ao Sr. Edilson via WhatsApp com voz (ElevenLabs).
+Nvidia NIM + Zep e responde ao Sr. Edilson via WhatsApp com voz (ElevenLabs).
 
 Porta padrão: 3000
 """
@@ -16,7 +16,6 @@ from datetime import datetime, timezone
 from typing import Any
 
 import httpx
-from anthropic import AsyncAnthropic
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
@@ -26,7 +25,6 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("dr-joao-holanda")
 
-ANTHROPIC_API_KEY  = os.getenv("ANTHROPIC_API_KEY", "")
 EVOLUTION_API_URL  = os.getenv("EVOLUTION_API_URL", "http://localhost:8080")
 EVOLUTION_API_KEY  = os.getenv("EVOLUTION_API_KEY", "")
 WHATSAPP_INSTANCE  = os.getenv("WHATSAPP_INSTANCE_NAME", "edilson")
@@ -38,10 +36,13 @@ ELEVENLABS_VOICE_ID= os.getenv("ELEVENLABS_VOICE_ID", "")
 OPENAI_API_KEY     = os.getenv("OPENAI_API_KEY", "")
 VPS_IP             = os.getenv("VPS_IP", "localhost")
 
-# ─── Nvidia NIM (backend OpenAI-compatível para Whisper / transcrição) ─────────
-# NIM é preferido sobre OpenAI quando OPENAI_API_KEY não está configurado.
+# ─── Nvidia NIM — motor único do ecossistema ──────────────────────────────────
+# A API do NIM é compatível com o formato OpenAI, então a mesma chave atende
+# raciocínio clínico (chat), memória do Zep e transcrição de áudio.
 NVIDIA_NIM_API_KEY  = os.getenv("NVIDIA_NIM_API_KEY", "")
 NVIDIA_NIM_BASE_URL = os.getenv("NVIDIA_NIM_BASE_URL", "https://integrate.api.nvidia.com/v1")
+# Modelo de raciocínio do Dr. João Holanda (bom desempenho em português)
+NIM_CHAT_MODEL      = os.getenv("NIM_CHAT_MODEL", "meta/llama-3.3-70b-instruct")
 
 # Resolve credenciais e endpoint de transcrição em tempo de inicialização
 _whisper_key   = OPENAI_API_KEY or NVIDIA_NIM_API_KEY
@@ -91,8 +92,8 @@ MEMÓRIA (Zep):
 
 Responda em português brasileiro. Seja conciso e caloroso."""
 
-# ─── Clientes ─────────────────────────────────────────────────────────────────
-claude_client = AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
+# ─── Cliente ──────────────────────────────────────────────────────────────────
+# Nenhum SDK proprietário: o NIM é consumido via HTTP no formato OpenAI.
 
 
 # ─── Zep helpers ──────────────────────────────────────────────────────────────
@@ -146,17 +147,36 @@ async def zep_save(patient_msg: str, agent_response: str, metadata: dict = None)
         logger.warning("Zep save error: %s", e)
 
 
-# ─── Claude ───────────────────────────────────────────────────────────────────
+# ─── Nvidia NIM — raciocínio clínico ──────────────────────────────────────────
 async def ask_dr_joao(message: str, memoria: str) -> str:
-    """Chama o Claude com o persona do Dr. João Holanda + contexto Zep."""
+    """
+    Gera a resposta do Dr. João Holanda via Nvidia NIM (API compatível OpenAI),
+    combinando o system prompt da persona com o contexto recuperado do Zep.
+    """
+    if not NVIDIA_NIM_API_KEY:
+        raise RuntimeError("NVIDIA_NIM_API_KEY não configurada")
+
     system = SYSTEM_PROMPT.replace("{memoria_zep}", memoria)
-    resp = await claude_client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=1024,
-        system=system,
-        messages=[{"role": "user", "content": message}],
-    )
-    return resp.content[0].text
+
+    async with httpx.AsyncClient(timeout=60) as client:
+        resp = await client.post(
+            f"{NVIDIA_NIM_BASE_URL}/chat/completions",
+            headers={"Authorization": f"Bearer {NVIDIA_NIM_API_KEY}",
+                     "Content-Type": "application/json"},
+            json={
+                "model": NIM_CHAT_MODEL,
+                "messages": [
+                    {"role": "system", "content": system},
+                    {"role": "user",   "content": message},
+                ],
+                "max_tokens": 1024,
+                "temperature": 0.6,   # equilíbrio entre acolhimento e consistência clínica
+                "top_p": 0.9,
+            },
+        )
+        if resp.status_code != 200:
+            raise RuntimeError(f"NIM HTTP {resp.status_code}: {resp.text[:200]}")
+        return resp.json()["choices"][0]["message"]["content"].strip()
 
 
 # ─── ElevenLabs TTS ───────────────────────────────────────────────────────────
