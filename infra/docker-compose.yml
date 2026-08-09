@@ -101,7 +101,9 @@ services:
   # Evolution API — gateway WhatsApp
   # ──────────────────────────────────────────
   evolution:
-    image: atendai/evolution-api:latest
+    # Fixada na versão já validada nesta VPS. 'latest' num gateway de WhatsApp
+    # muda o comportamento do Baileys sem aviso, no meio de um pareamento.
+    image: ${EVOLUTION_IMAGE:-evoapicloud/evolution-api:v2.3.7}
     container_name: evolution_api
     restart: always
     ports:
@@ -115,15 +117,30 @@ services:
       - DATABASE_CONNECTION_URI=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${EVOLUTION_DB_NAME}
       - DATABASE_CONNECTION_CLIENT_NAME=evolution
       - DATABASE_SAVE_DATA_INSTANCE=true
-      - DATABASE_SAVE_DATA_NEW_MESSAGE=true
       - DATABASE_SAVE_MESSAGE_UPDATE=true
-      - DATABASE_SAVE_DATA_CONTACTS=true
-      - DATABASE_SAVE_DATA_CHATS=true
-      - CACHE_REDIS_ENABLED=true
-      - CACHE_REDIS_URI=redis://:${REDIS_PASSWORD}@redis:6379/6
-      - CACHE_REDIS_PREFIX_KEY=evolution
-      - CACHE_REDIS_SAVE_INSTANCES=true
-      - CACHE_LOCAL_ENABLED=false
+      # ─────────────────────────────────────────────────────────────────
+      # Correção do erro "Não foi possível conectar o dispositivo"
+      # (meta-issue EvolutionAPI/evolution-api#2437)
+      #
+      # Causa: o Baileys gera as pre-keys ao mesmo tempo em que a Meta
+      # despeja o histórico da conta. O servidor satura, a geração das
+      # pre-keys estoura o timeout, vem stream error 515 e o WhatsApp
+      # derruba o dispositivo recém-pareado.
+      #
+      # Solução: desligar a sincronização de histórico e o cache Redis
+      # durante a sessão, deixando o pareamento respirar.
+      - DATABASE_SAVE_DATA_NEW_MESSAGE=false
+      - DATABASE_SAVE_DATA_CONTACTS=false
+      - DATABASE_SAVE_DATA_CHATS=false
+      - DATABASE_SAVE_DATA_HISTORIC=false
+      - DATABASE_SAVE_DATA_LABELS=false
+      - CACHE_REDIS_ENABLED=false
+      - CACHE_LOCAL_ENABLED=true
+      # Versão do WhatsApp Web que o Baileys declara. Desatualizada, a Meta
+      # recusa a conexão. Ajustável pelo .env quando a comunidade publicar
+      # uma nova referência.
+      - CONFIG_SESSION_PHONE_VERSION=${CONFIG_SESSION_PHONE_VERSION:-2.3000.1033773198}
+      # ─────────────────────────────────────────────────────────────────
       - LOG_LEVEL=ERROR
       - LOG_COLOR=false
       - DEL_INSTANCE=false
