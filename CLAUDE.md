@@ -89,10 +89,13 @@ Evolution API / Twilio  ──►  Agente Dr. João Holanda (FastAPI :3000)
               └──────────┴───────────┼───────────┴──────────┘
                                      ▼
                     ╔════════════════════════════════════╗
-                    ║   Nemotron 3 Nano Omni (NIM)       ║
-                    ║   motor ÚNICO — uma inferência:    ║
+                    ║   Motor ÚNICO — uma inferência:    ║
                     ║   texto · áudio · imagem · vídeo   ║
-                    ║   30B-A3B MoE · contexto 256K      ║
+                    ║   ── LLM_PROVIDER escolhe ──       ║
+                    ║   Gemini 2.5 Flash (Google)        ║
+                    ║     lê PDF nativamente · 1M ctx    ║
+                    ║   Nemotron 3 Nano Omni (NIM)       ║
+                    ║     30B-A3B MoE · 256K ctx         ║
                     ╚════════════════════════════════════╝
                                      │
                     ┌────────────────┼────────────────┐
@@ -114,9 +117,9 @@ Evolution API / Twilio  ──►  Agente Dr. João Holanda (FastAPI :3000)
 | Mensageria | WhatsApp Business API | Canal principal (texto, áudio, imagem, PDF) |
 | Gateway WA | Evolution API (self-hosted) ou Twilio | Webhook de entrada/saída |
 | Orquestrador | **n8n** | Fluxos, condicionais, agendamentos (cron) |
-| STT | **Nemotron Omni** (encoder Parakeet-TDT integrado) | Transcrição de áudios .ogg → texto, via ffmpeg → WAV 16 kHz |
-| LLM Principal | **Nvidia NIM** — `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning` | Motor único multimodal: raciocínio clínico, leitura de exames (imagem/PDF), análise de refeições, vídeo e nota de voz |
-| LLM Visão | **Nemotron Omni** (encoder C-RADIOv4-H integrado) | Leitura de PDFs de exames, fotos de refeições e vídeo |
+| STT | O próprio motor multimodal (Gemini ou Nemotron Omni) | Transcrição de áudios .ogg → texto, via ffmpeg → WAV 16 kHz |
+| LLM Principal | **Google Gemini** (`gemini-2.5-flash`) ou **Nvidia NIM** (`nemotron-3-nano-omni`) — trocável por `LLM_PROVIDER` | Motor único multimodal: raciocínio clínico, leitura de exames (imagem/PDF), análise de refeições, vídeo e nota de voz |
+| LLM Visão | O próprio motor multimodal | Leitura de exames, fotos de refeições e vídeo. O Gemini lê PDF nativamente; com NIM, as páginas são rasterizadas |
 | TTS | **ElevenLabs** | Geração de áudio de resposta (voz Dr. João Holanda) |
 | Memória | **Zep** (grafo temporal) ou **Mem0** | Histórico longitudinal; lembra evolução de exames e queixas |
 | Banco estruturado | **Google Sheets** | Tabelas de exames, medicamentos, peso, humor |
@@ -255,8 +258,16 @@ WHATSAPP_INSTANCE_NAME=
 # OpenAI
 OPENAI_API_KEY=
 
-# Nvidia NIM — motor único (raciocínio clínico, memória Zep, transcrição)
-# API compatível com o formato OpenAI. Chave em build.nvidia.com
+# Motor de IA: "gemini" ou "nim" (vazio = gemini se houver GEMINI_API_KEY)
+LLM_PROVIDER=
+
+# Google Gemini — chave do Google AI Studio (aistudio.google.com/apikey).
+# ATENÇÃO: a assinatura Google One / Gemini Advanced NÃO dá acesso à API.
+# São produtos separados; o AI Studio tem plano gratuito próprio.
+GEMINI_API_KEY=
+GEMINI_MODEL=gemini-2.5-flash
+
+# Nvidia NIM — motor alternativo. Chave em build.nvidia.com
 NVIDIA_NIM_API_KEY=
 NVIDIA_NIM_BASE_URL=https://integrate.api.nvidia.com/v1
 NIM_CHAT_MODEL=nvidia/nemotron-3-nano-omni-30b-a3b-reasoning

@@ -270,60 +270,43 @@ async def zep_save(patient_msg: str, agent_response: str, metadata: dict = None)
         logger.warning("Zep save error: %s", e)
 
 
-# ─── Nvidia NIM — motor multimodal ────────────────────────────────────────────
-# Mapeia o mimetype da mídia para o tipo de conteúdo esperado pela API do Omni.
-MEDIA_PART_TYPES = {
-    "audio": "audio_url",
-    "image": "image_url",
-    "video": "video_url",
-}
+# ─── Motor de IA ──────────────────────────────────────────────────────────────
+# A escolha do provedor — Google Gemini ou Nvidia NIM — vive em llm_backend.py.
+# Aqui o código apenas monta o prompt e entrega a mídia em formato neutro,
+# sem conhecer o formato de nenhuma das duas APIs.
+from llm_backend import (  # noqa: E402
+    MODELO_ATUAL,
+    PROVIDER,
+    build_media_part,
+    chamar_modelo,
+    listar_modelos,
+    suporta_pdf_nativo,
+)
+from llm_backend import configurado as llm_configurado  # noqa: E402
 
-
-def build_media_part(kind: str, data: bytes, mime: str) -> dict:
-    """
-    Monta um bloco de conteúdo multimodal no formato data URI base64.
-    kind: 'audio' | 'image' | 'video'
-    """
-    key = MEDIA_PART_TYPES[kind]
-    b64 = base64.b64encode(data).decode()
-    return {"type": key, key: {"url": f"data:{mime};base64,{b64}"}}
+# Tipos de mídia aceitos na entrada (validação do chat web)
+MEDIA_PART_TYPES = {"audio": "audio", "image": "image", "video": "video"}
 
 
 async def call_nim(messages: list[dict], max_tokens: int = 1024,
                    temperature: float = 0.6, reasoning: bool = True,
                    media_io: dict | None = None) -> str:
     """
-    Chamada genérica ao Nemotron Omni via API compatível com OpenAI.
-    Retorna apenas o conteúdo final — o rascunho de raciocínio (campo
-    'reasoning') é descartado, pois não deve chegar ao Sr. Edilson.
+    Compatibilidade: converte o formato de mensagens do OpenAI para a
+    interface do backend. Mantida para não quebrar chamadas existentes.
     """
-    if not NVIDIA_NIM_API_KEY:
-        raise RuntimeError("NVIDIA_NIM_API_KEY não configurada")
+    system = next((m["content"] for m in messages if m.get("role") == "system"), "")
+    usuario = next((m for m in messages if m.get("role") == "user"), {})
+    conteudo = usuario.get("content", "")
 
-    payload: dict[str, Any] = {
-        "model": NIM_CHAT_MODEL,
-        "messages": messages,
-        "max_tokens": max_tokens,
-        "temperature": temperature,
-        "top_p": 0.9,
-    }
-    if reasoning and NIM_REASONING_BUDGET > 0:
-        payload["reasoning_budget"] = NIM_REASONING_BUDGET
-    if media_io:
-        # Controla amostragem de vídeo (fps / num_frames) na inferência
-        payload["media_io_kwargs"] = media_io
+    if isinstance(conteudo, str):
+        return await chamar_modelo(system, conteudo, None, max_tokens,
+                                   temperature, reasoning)
 
-    # Mídia em base64 deixa o corpo grande; timeout generoso para vídeo/áudio longo
-    async with httpx.AsyncClient(timeout=180) as client:
-        resp = await client.post(
-            f"{NVIDIA_NIM_BASE_URL}/chat/completions",
-            headers={"Authorization": f"Bearer {NVIDIA_NIM_API_KEY}",
-                     "Content-Type": "application/json"},
-            json=payload,
-        )
-        if resp.status_code != 200:
-            raise RuntimeError(f"NIM HTTP {resp.status_code}: {resp.text[:300]}")
-        return resp.json()["choices"][0]["message"]["content"].strip()
+    texto = " ".join(p.get("text", "") for p in conteudo if p.get("type") == "text")
+    partes = [p for p in conteudo if p.get("kind")]
+    return await chamar_modelo(system, texto, partes, max_tokens,
+                               temperature, reasoning)
 
 
 def descrever_interlocutor(contato: dict[str, str] | None) -> str:
@@ -355,17 +338,7 @@ async def ask_dr_joao(message: str, memoria: str,
               .replace("{tom_de_voz}", tom_de_voz or "Nenhuma nota de voz nesta mensagem.")
               .replace("{interlocutor}", descrever_interlocutor(contato)))
 
-    # Sem mídia, o conteúdo é texto puro; com mídia, vira lista de blocos
-    if media_parts:
-        content: Any = [{"type": "text", "text": message}] + media_parts
-    else:
-        content = message
-
-    return await call_nim(
-        [{"role": "system", "content": system},
-         {"role": "user",   "content": content}],
-        max_tokens=1024,
-    )
+    return await chamar_modelo(system, message, media_parts, max_tokens=1024)
 
 
 # ─── ElevenLabs TTS ───────────────────────────────────────────────────────────
@@ -499,12 +472,19 @@ def pdf_para_imagens(pdf_bytes: bytes) -> list[bytes]:
 
 def blocos_de_documento(raw: bytes, mime: str) -> list[dict]:
     """
-    Prepara qualquer documento para o modelo: PDF vira uma imagem por página,
-    imagem segue direto. Usado por Telegram, chat web e WhatsApp.
+    Prepara qualquer documento para o modelo. Usado por Telegram, chat web
+    e WhatsApp.
+
+    O Gemini lê PDF nativamente — melhor, porque preserva o texto vetorial
+    em vez de depender da resolução da rasterização. O Nemotron Omni não
+    aceita PDF, então para ele cada página é convertida em imagem.
     """
     mime = (mime or "").split(";")[0].strip().lower()
 
     if mime == "application/pdf" or raw[:5] == b"%PDF-":
+        if suporta_pdf_nativo():
+            logger.info("PDF enviado nativamente ao %s", PROVIDER)
+            return [build_media_part("document", raw, "application/pdf")]
         return [build_media_part("image", png, "image/png")
                 for png in pdf_para_imagens(raw)]
 
@@ -906,9 +886,12 @@ async def health():
         "status": "ok",
         "agent": "Dr. João Holanda Cavalcante",
         "paciente": "Sr. Edilson — Parintins, AM",
-        "modelo": NIM_CHAT_MODEL,
+        "provedor": PROVIDER,
+        "modelo": MODELO_ATUAL,
+        "credencial_ok": llm_configurado(),
         "recursos": {
-            "leitura_pdf": leitura_pdf,
+            "leitura_pdf": suporta_pdf_nativo() or leitura_pdf,
+            "pdf_nativo": suporta_pdf_nativo(),
             "chat_web": True,
             "telegram": bool(TELEGRAM_BOT_TOKEN),
             "whatsapp": bool(EVOLUTION_API_KEY),
@@ -1430,6 +1413,26 @@ async def add_fact(request: Request):
         return JSONResponse({"status": "ok" if ok else "falhou", "fato": fact})
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/modelos")
+async def modelos_disponiveis(request: Request):
+    """
+    Lista os modelos que a chave configurada pode usar. Os nomes mudam entre
+    gerações do Gemini e um nome errado devolve 404 — daí a consulta.
+    """
+    require_token(request)
+    try:
+        disponiveis = await listar_modelos()
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Falha ao listar modelos: {e}")
+
+    return JSONResponse({
+        "provedor": PROVIDER,
+        "modelo_em_uso": MODELO_ATUAL,
+        "em_uso_disponivel": MODELO_ATUAL in disponiveis if disponiveis else None,
+        "disponiveis": disponiveis,
+    })
 
 
 @app.get("/memoria/contexto")

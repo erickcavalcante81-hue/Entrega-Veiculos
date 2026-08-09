@@ -188,7 +188,12 @@ services:
       - ZEP_SESSION_ID=${ZEP_SESSION_ID}
       - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY}
       - ELEVENLABS_VOICE_ID=${ELEVENLABS_VOICE_ID}
-      # Nvidia NIM — motor único multimodal (texto, imagem, vídeo, áudio)
+      # Motor de IA: "gemini" ou "nim". Vazio = gemini se houver GEMINI_API_KEY.
+      - LLM_PROVIDER=${LLM_PROVIDER:-}
+      # Google Gemini (chave do Google AI Studio — aistudio.google.com)
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.5-flash}
+      # Nvidia NIM — motor alternativo (texto, imagem, vídeo, áudio)
       - NVIDIA_NIM_API_KEY=${NVIDIA_NIM_API_KEY}
       - NVIDIA_NIM_BASE_URL=https://integrate.api.nvidia.com/v1
       - NIM_CHAT_MODEL=${NIM_CHAT_MODEL:-nvidia/nemotron-3-nano-omni-30b-a3b-reasoning}
