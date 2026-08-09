@@ -54,6 +54,17 @@ NIM_REASONING_BUDGET = int(os.getenv("NIM_REASONING_BUDGET", "4096"))
 EDILSON_PHONE      = os.getenv("EDILSON_PHONE", "")      # ex: 5592999999999
 FAMILY_GROUP_ID    = os.getenv("N8N_FAMILY_GROUP_WA_ID", "")
 
+# ─── Canal Telegram ───────────────────────────────────────────────────────────
+# API oficial e gratuita, sem risco de banimento — diferente do Baileys, que a
+# Meta detecta e bane. Conversa por texto, voz, foto, vídeo e documento.
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+# IDs autorizados, separados por vírgula. Vazio = responde a qualquer um
+# (apenas para o cadastro inicial; o log mostra o chat_id de quem escrever).
+TELEGRAM_ALLOWED_IDS = {
+    int(i) for i in os.getenv("TELEGRAM_ALLOWED_IDS", "").replace(" ", "").split(",")
+    if i.lstrip("-").isdigit()
+}
+
 # ─── Controle de acesso ───────────────────────────────────────────────────────
 # A porta do agente é publicada na internet. Endpoints que expõem dado clínico
 # do Sr. Edilson, o chat ou o QR de pareamento do WhatsApp exigem este token.
@@ -450,6 +461,31 @@ async def ogg_to_wav(audio_data: bytes) -> bytes | None:
         return None
 
 
+async def to_ogg_opus(audio_data: bytes) -> bytes | None:
+    """
+    Converte o áudio do ElevenLabs (MP3) para OGG/Opus, formato exigido
+    pelo Telegram para notas de voz. Em memória, sem tocar o disco.
+    """
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "ffmpeg", "-hide_banner", "-loglevel", "error",
+            "-i", "pipe:0",
+            "-c:a", "libopus", "-b:a", "32k", "-ar", "48000", "-ac", "1",
+            "-f", "ogg", "pipe:1",
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        out, err = await proc.communicate(input=audio_data)
+        if proc.returncode != 0:
+            logger.warning("ffmpeg (ogg/opus) falhou: %s", err.decode()[:200])
+            return None
+        return out
+    except Exception as e:
+        logger.warning("Erro na conversão para ogg/opus: %s", e)
+        return None
+
+
 async def transcribe_audio(audio_data: bytes) -> str:
     """
     Transcreve a nota de voz do Sr. Edilson usando o próprio Nemotron Omni.
@@ -730,11 +766,25 @@ async def check_clinical_alerts(text: str, from_number: str) -> None:
                             f"Dr. João Holanda recomenda contato urgente com nefrologista.")
 
 
+# ─── Handler compartilhado entre os canais ────────────────────────────────────
+async def responder(texto: str, media_parts: list[dict], tipo: str) -> str:
+    """
+    Núcleo do atendimento, usado por Telegram, chat web e WhatsApp:
+    memória → inferência multimodal → persistência → alertas clínicos.
+    """
+    memoria = await zep_get_context()
+    resposta = await ask_dr_joao(texto, memoria, media_parts or None)
+    await zep_save(texto, resposta, {"tipo": tipo})
+    await check_clinical_alerts(resposta, "canal")
+    return resposta
+
+
 # ─── FastAPI app ──────────────────────────────────────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Dr. João Holanda Agent iniciando...")
     logger.info("Evolution API: %s | Zep: %s", EVOLUTION_API_URL, ZEP_API_URL)
+
     # Inicializa memória do paciente no Zep
     try:
         from integrations.zep_memory import initialize_patient_knowledge
@@ -742,7 +792,37 @@ async def lifespan(app: FastAPI):
         logger.info("Conhecimento do Sr. Edilson carregado no Zep ✓")
     except Exception as e:
         logger.warning("Zep init skip: %s", e)
+
+    # Canal Telegram em long polling, se houver token configurado
+    tarefa_telegram = None
+    if TELEGRAM_BOT_TOKEN:
+        from telegram_channel import TelegramChannel
+        canal = TelegramChannel(
+            token=TELEGRAM_BOT_TOKEN,
+            allowed_ids=TELEGRAM_ALLOWED_IDS,
+            handler=responder,
+            build_media_part=build_media_part,
+            to_wav=ogg_to_wav,
+            to_ogg=to_ogg_opus,
+            tts=text_to_speech,
+            transcrever=transcribe_audio,
+        )
+        app.state.telegram = canal
+        tarefa_telegram = asyncio.create_task(canal.rodar())
+        logger.info("Canal Telegram iniciando (%d contatos autorizados)...",
+                    len(TELEGRAM_ALLOWED_IDS))
+    else:
+        logger.info("TELEGRAM_BOT_TOKEN ausente — canal Telegram desativado.")
+
     yield
+
+    if tarefa_telegram:
+        app.state.telegram.parar()
+        tarefa_telegram.cancel()
+        try:
+            await tarefa_telegram
+        except (asyncio.CancelledError, Exception):
+            pass
     logger.info("Dr. João Holanda Agent encerrando.")
 
 

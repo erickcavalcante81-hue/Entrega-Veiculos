@@ -197,6 +197,9 @@ services:
       - EXTRA_ALLOWED_NUMBERS=${EXTRA_ALLOWED_NUMBERS:-}
       # Protege /chat, /qrcode e /memoria/* — a porta do agente é pública
       - AGENT_ACCESS_TOKEN=${AGENT_ACCESS_TOKEN:-}
+      # Canal Telegram (API oficial, sem risco de banimento)
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - TELEGRAM_ALLOWED_IDS=${TELEGRAM_ALLOWED_IDS:-}
       - VPS_IP=${VPS_IP}
       - EDILSON_PHONE=${EDILSON_PHONE}
       - N8N_FAMILY_GROUP_WA_ID=${N8N_FAMILY_GROUP_WA_ID}

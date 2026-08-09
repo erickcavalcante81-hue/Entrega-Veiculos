@@ -1,0 +1,264 @@
+"""
+telegram_channel.py — Canal Telegram do Dr. João Holanda Cavalcante
+
+Alternativa ao WhatsApp: a Meta bane números que conectam via Baileys
+(engenharia reversa do WhatsApp Web). O Telegram tem API oficial e
+gratuita para bots, sem risco de banimento e sem precisar de chip.
+
+Usa LONG POLLING (getUpdates), não webhook: o Telegram exige HTTPS com
+certificado válido para webhooks, e o polling dispensa domínio, TLS e
+abertura de porta — o agente é quem inicia a conexão de saída.
+
+Modalidades suportadas, todas encaminhadas ao Nemotron Omni:
+  • texto
+  • nota de voz (OGG/Opus, mesmo formato do WhatsApp)
+  • foto (refeição, exame impresso)
+  • vídeo
+  • documento (PDF de exame)
+"""
+
+import asyncio
+import logging
+from typing import Any, Awaitable, Callable, Optional
+
+import httpx
+
+logger = logging.getLogger("dr-joao-holanda.telegram")
+
+API_BASE = "https://api.telegram.org"
+# Limite de download da Bot API do Telegram
+MAX_FILE_BYTES = 20 * 1024 * 1024
+
+
+class TelegramChannel:
+    """
+    Canal de conversa via Telegram.
+
+    handler: async (texto, media_parts, tipo) -> resposta em texto
+    to_wav:  async (bytes) -> WAV 16 kHz (conversão do áudio recebido)
+    to_ogg:  async (bytes) -> OGG/Opus (conversão da resposta em voz)
+    tts:     async (texto) -> bytes de áudio, ou None
+    """
+
+    def __init__(
+        self,
+        token: str,
+        allowed_ids: set[int],
+        handler: Callable[[str, list[dict], str], Awaitable[str]],
+        build_media_part: Callable[[str, bytes, str], dict],
+        to_wav: Optional[Callable[[bytes], Awaitable[Optional[bytes]]]] = None,
+        to_ogg: Optional[Callable[[bytes], Awaitable[Optional[bytes]]]] = None,
+        tts: Optional[Callable[[str], Awaitable[Optional[bytes]]]] = None,
+        transcrever: Optional[Callable[[bytes], Awaitable[str]]] = None,
+    ):
+        self.token = token
+        self.allowed_ids = allowed_ids
+        self.handler = handler
+        self.build_media_part = build_media_part
+        self.to_wav = to_wav
+        self.to_ogg = to_ogg
+        self.tts = tts
+        self.transcrever = transcrever
+        self._offset = 0
+        self._parar = False
+
+    # ─── Chamadas à Bot API ──────────────────────────────────────────────────
+    def _url(self, metodo: str) -> str:
+        return f"{API_BASE}/bot{self.token}/{metodo}"
+
+    async def _api(self, metodo: str, **params) -> dict:
+        async with httpx.AsyncClient(timeout=60) as client:
+            r = await client.post(self._url(metodo), json=params)
+            if r.status_code != 200:
+                logger.warning("Telegram %s falhou: HTTP %s — %s",
+                               metodo, r.status_code, r.text[:200])
+                return {}
+            return r.json().get("result", {})
+
+    async def enviar_texto(self, chat_id: int, texto: str) -> None:
+        # O Telegram corta mensagens acima de 4096 caracteres
+        for i in range(0, len(texto), 4000):
+            await self._api("sendMessage", chat_id=chat_id, text=texto[i:i + 4000])
+
+    async def enviar_voz(self, chat_id: int, audio: bytes) -> bool:
+        """Envia como nota de voz. Exige OGG/Opus — converte se necessário."""
+        ogg = await self.to_ogg(audio) if self.to_ogg else None
+        if not ogg:
+            return False
+        async with httpx.AsyncClient(timeout=90) as client:
+            r = await client.post(
+                self._url("sendVoice"),
+                data={"chat_id": str(chat_id)},
+                files={"voice": ("resposta.ogg", ogg, "audio/ogg")},
+            )
+            if r.status_code != 200:
+                logger.warning("Telegram sendVoice falhou: %s", r.text[:200])
+                return False
+            return True
+
+    async def _baixar_arquivo(self, file_id: str) -> Optional[bytes]:
+        """Resolve o file_id e baixa o conteúdo."""
+        info = await self._api("getFile", file_id=file_id)
+        caminho = info.get("file_path")
+        if not caminho:
+            return None
+        if info.get("file_size", 0) > MAX_FILE_BYTES:
+            logger.warning("Arquivo acima do limite da Bot API (20 MB)")
+            return None
+
+        async with httpx.AsyncClient(timeout=120) as client:
+            r = await client.get(f"{API_BASE}/file/bot{self.token}/{caminho}")
+            return r.content if r.status_code == 200 else None
+
+    # ─── Interpretação da mensagem ───────────────────────────────────────────
+    async def _extrair(self, msg: dict) -> tuple[str, list[dict], str]:
+        """Devolve (texto, blocos_de_midia, tipo) a partir de uma mensagem."""
+        partes: list[dict] = []
+
+        if "text" in msg:
+            return msg["text"], partes, "texto"
+
+        legenda = msg.get("caption", "")
+
+        # Nota de voz ou arquivo de áudio
+        if "voice" in msg or "audio" in msg:
+            origem = msg.get("voice") or msg["audio"]
+            bruto = await self._baixar_arquivo(origem["file_id"])
+            if not bruto:
+                return "", partes, "audio"
+
+            texto = legenda
+            if self.transcrever and not texto:
+                texto = await self.transcrever(bruto)
+
+            if self.to_wav:
+                wav = await self.to_wav(bruto)
+                if wav:
+                    partes.append(self.build_media_part("audio", wav, "audio/wav"))
+            return texto, partes, "audio"
+
+        # Foto — o Telegram manda várias resoluções; a última é a maior
+        if "photo" in msg:
+            bruto = await self._baixar_arquivo(msg["photo"][-1]["file_id"])
+            if not bruto:
+                return "", partes, "image"
+            partes.append(self.build_media_part("image", bruto, "image/jpeg"))
+            texto = legenda or (
+                "O Sr. Edilson enviou uma foto. Analise a imagem: se for uma "
+                "refeição, avalie do ponto de vista nutricional considerando as "
+                "restrições renais e oncológicas dele; se for um exame, leia os "
+                "valores e interprete-os."
+            )
+            return texto, partes, "image"
+
+        if "video" in msg:
+            bruto = await self._baixar_arquivo(msg["video"]["file_id"])
+            if not bruto:
+                return "", partes, "video"
+            mime = msg["video"].get("mime_type", "video/mp4").split(";")[0]
+            partes.append(self.build_media_part("video", bruto, mime))
+            return (legenda or "O Sr. Edilson enviou um vídeo. Observe o que "
+                    "acontece e comente com acolhimento."), partes, "video"
+
+        # Documento — PDF de exame chega por aqui
+        if "document" in msg:
+            doc = msg["document"]
+            bruto = await self._baixar_arquivo(doc["file_id"])
+            if not bruto:
+                return "", partes, "document"
+            mime = doc.get("mime_type", "application/pdf").split(";")[0]
+            # O Omni lê PDF e imagem pelo mesmo canal visual
+            partes.append(self.build_media_part("image", bruto, mime))
+            nome = doc.get("file_name", "documento")
+            texto = legenda or (
+                f"O Sr. Edilson enviou o documento '{nome}'. Leia o conteúdo. "
+                f"Se for um exame laboratorial, extraia os marcadores (PSA, eTFG, "
+                f"creatinina) com seus valores e interprete-os segundo as regras "
+                f"clínicas."
+            )
+            return texto, partes, "document"
+
+        return "", partes, "desconhecido"
+
+    async def _tratar(self, update: dict) -> None:
+        msg = update.get("message") or update.get("edited_message")
+        if not msg:
+            return
+
+        chat_id = msg.get("chat", {}).get("id")
+        if chat_id is None:
+            return
+
+        # Filtro de contatos: assistente clínico privado, não chatbot aberto.
+        # Sem lista configurada, registra o ID para facilitar o cadastro inicial.
+        if self.allowed_ids and chat_id not in self.allowed_ids:
+            quem = msg.get("from", {})
+            logger.warning("Telegram: mensagem ignorada de chat_id=%s (%s %s)",
+                           chat_id, quem.get("first_name", ""), quem.get("username", ""))
+            return
+        if not self.allowed_ids:
+            logger.warning("TELEGRAM_ALLOWED_IDS vazio — respondendo a "
+                           "chat_id=%s. Adicione-o ao .env para restringir.", chat_id)
+
+        await self._api("sendChatAction", chat_id=chat_id, action="typing")
+
+        texto, partes, tipo = await self._extrair(msg)
+        if not texto and not partes:
+            await self.enviar_texto(
+                chat_id, "Não consegui ler essa mensagem, Sr. Edilson. "
+                         "Pode mandar de novo?")
+            return
+
+        try:
+            resposta = await self.handler(texto, partes, tipo)
+        except Exception as e:
+            logger.error("Erro no processamento (Telegram): %s", e)
+            await self.enviar_texto(
+                chat_id, "Desculpe, tive uma dificuldade técnica agora. "
+                         "Pode me repetir o que disse?")
+            return
+
+        # Voz quando o ElevenLabs estiver configurado; texto sempre, para
+        # que a resposta fique legível e registrada na conversa.
+        enviou_voz = False
+        if self.tts:
+            audio = await self.tts(resposta)
+            if audio:
+                enviou_voz = await self.enviar_voz(chat_id, audio)
+        if not enviou_voz:
+            await self.enviar_texto(chat_id, resposta)
+
+    # ─── Laço de long polling ────────────────────────────────────────────────
+    async def rodar(self) -> None:
+        """
+        Consome atualizações continuamente. Cada ciclo espera até 30 s no
+        servidor do Telegram (long polling), então não há busy-wait.
+        """
+        eu = await self._api("getMe")
+        if not eu:
+            logger.error("Telegram: token inválido — canal não iniciado.")
+            return
+        logger.info("Telegram ativo: @%s (%s)", eu.get("username"), eu.get("first_name"))
+
+        # Descarta webhook eventualmente configurado, que bloquearia o getUpdates
+        await self._api("deleteWebhook", drop_pending_updates=False)
+
+        while not self._parar:
+            try:
+                updates = await self._api(
+                    "getUpdates", offset=self._offset, timeout=30,
+                    allowed_updates=["message", "edited_message"],
+                )
+                for u in updates or []:
+                    self._offset = u["update_id"] + 1
+                    # Uma tarefa por mensagem: uma inferência lenta não
+                    # segura a fila das demais
+                    asyncio.create_task(self._tratar(u))
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                logger.warning("Telegram polling: %s — nova tentativa em 5 s", e)
+                await asyncio.sleep(5)
+
+    def parar(self) -> None:
+        self._parar = True
