@@ -121,7 +121,7 @@ Evolution API / Twilio  ──►  Agente Dr. João Holanda (FastAPI :3000)
 | LLM Principal | **Google Gemini** (`gemini-2.5-flash`) ou **Nvidia NIM** (`nemotron-3-nano-omni`) — trocável por `LLM_PROVIDER` | Motor único multimodal: raciocínio clínico, leitura de exames (imagem/PDF), análise de refeições, vídeo e nota de voz |
 | LLM Visão | O próprio motor multimodal | Leitura de exames, fotos de refeições e vídeo. O Gemini lê PDF nativamente; com NIM, as páginas são rasterizadas |
 | TTS | **ElevenLabs** | Geração de áudio de resposta (voz Dr. João Holanda) |
-| Memória | **Zep** (grafo temporal) ou **Mem0** | Histórico longitudinal; lembra evolução de exames e queixas |
+| Memória | **Zep** (grafo temporal) — resumo e embeddings pelo mesmo provedor do agente | Histórico longitudinal; fatos clínicos datados sobrevivem à janela de mensagens |
 | Banco estruturado | **Google Sheets** | Tabelas de exames, medicamentos, peso, humor |
 | Agenda | **Google Calendar** | Lembretes de medicação, consultas, exames |
 | Câmera | **Intelbras Mibo Smart** (RTSP) | Monitoramento de ADL e detecção de quedas |
@@ -266,6 +266,8 @@ LLM_PROVIDER=
 # São produtos separados; o AI Studio tem plano gratuito próprio.
 GEMINI_API_KEY=
 GEMINI_MODEL=gemini-2.5-flash
+GEMINI_EMBED_MODEL=text-embedding-004   # embeddings do Zep (768 dimensões)
+GEMINI_EMBED_DIMS=768
 
 # Nvidia NIM — motor alternativo. Chave em build.nvidia.com
 NVIDIA_NIM_API_KEY=

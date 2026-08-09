@@ -199,6 +199,26 @@ echo ""
 echo "════ PASSO 5 — Gerando zep_config.yaml ════"
 # Zep CE v0.27.x ignora variáveis de ambiente para store.type e llm;
 # é necessário fornecer um config.yaml explícito montado no container.
+#
+# O Zep fala protocolo OpenAI. Com GEMINI_API_KEY configurada, usamos a camada
+# compatível do Gemini (/v1beta/openai/) para que o sistema inteiro dependa de
+# uma única chave. Sem ela, cai para a Nvidia NIM.
+if [ -n "${GEMINI_API_KEY:-}" ]; then
+  ZEP_LLM_MODEL="${GEMINI_MODEL:-gemini-2.5-flash}"
+  ZEP_LLM_KEY="${GEMINI_API_KEY}"
+  ZEP_LLM_URL="https://generativelanguage.googleapis.com/v1beta/openai"
+  ZEP_EMBED_MODEL="${GEMINI_EMBED_MODEL:-text-embedding-004}"
+  ZEP_EMBED_DIMS="${GEMINI_EMBED_DIMS:-768}"
+  ZEP_PROVEDOR="Gemini"
+else
+  ZEP_LLM_MODEL="meta/llama-3.1-8b-instruct"
+  ZEP_LLM_KEY="${NVIDIA_NIM_API_KEY}"
+  ZEP_LLM_URL="https://integrate.api.nvidia.com/v1"
+  ZEP_EMBED_MODEL="nvidia/nv-embedqa-e5-v5"
+  ZEP_EMBED_DIMS="1024"
+  ZEP_PROVEDOR="Nvidia NIM"
+fi
+
 cat > /root/automacao/zep_config.yaml << ZEOF
 server:
   port: 8000
@@ -214,23 +234,23 @@ auth:
 
 llm:
   service: openai
-  model: meta/llama-3.1-8b-instruct
-  openai_api_key: "${NVIDIA_NIM_API_KEY}"
-  openai_endpoint: "https://integrate.api.nvidia.com/v1"
+  model: ${ZEP_LLM_MODEL}
+  openai_api_key: "${ZEP_LLM_KEY}"
+  openai_endpoint: "${ZEP_LLM_URL}"
 
 extractors:
   documents:
     embeddings:
       enabled: true
-      dimensions: 1024
+      dimensions: ${ZEP_EMBED_DIMS}
       service: openai
-      model: nvidia/nv-embedqa-e5-v5
+      model: ${ZEP_EMBED_MODEL}
   messages:
     embeddings:
       enabled: true
-      dimensions: 1024
+      dimensions: ${ZEP_EMBED_DIMS}
       service: openai
-      model: nvidia/nv-embedqa-e5-v5
+      model: ${ZEP_EMBED_MODEL}
 
 log:
   level: info
@@ -239,7 +259,8 @@ memory:
   message_window: 12
 ZEOF
 echo "  zep_config.yaml gerado ✓"
-echo "  Store: postgres | LLM: meta/llama-3.1-8b-instruct via NIM"
+echo "  Store: postgres | LLM: ${ZEP_LLM_MODEL} via ${ZEP_PROVEDOR}"
+echo "  Embeddings: ${ZEP_EMBED_MODEL} (${ZEP_EMBED_DIMS} dimensões)"
 
 # ─── PASSO 6: Sobe Zep ────────────────────────────────────────────────────────
 echo ""
