@@ -707,6 +707,11 @@ async def process_message(from_number: str, message_text: str,
     #    os valores só aparecem depois que o modelo lê o documento.
     await check_clinical_alerts(resposta, from_number)
 
+    # 8. Exame recebido: extrai os valores em formato estruturado e grava como
+    #    fatos datados, permitindo comparar a evolução meses depois.
+    if message_type in ("image", "document") and media_parts:
+        await registrar_marcadores(media_parts)
+
     # 8. Sinais vocais persistentes de sofrimento escalam para a família
     if desvios and (contato or {}).get("papel") == "paciente":
         await avaliar_escalonamento_vocal(desvios, tom_resumo)
@@ -766,6 +771,93 @@ async def avaliar_escalonamento_vocal(desvios: list[str], resumo: str) -> None:
         _historico_desvios.clear()
 
 
+# ─── Extração estruturada de marcadores ──────────────────────────────────────
+# A resposta do Dr. João é prosa acolhedora — boa para o Sr. Edilson, ruim para
+# cruzar dados meses depois. Aqui os valores do exame são extraídos em formato
+# estruturado e gravados como fatos datados, que sobrevivem à janela de
+# mensagens do Zep e alimentam a comparação longitudinal.
+PROMPT_EXTRACAO = """Extraia os marcadores laboratoriais deste exame.
+
+Responda APENAS com JSON válido, sem cercas de código e sem comentários:
+{"data_exame": "AAAA-MM-DD ou null se não constar",
+ "laboratorio": "nome ou null",
+ "marcadores": [{"nome": "PSA", "valor": 0.12, "unidade": "ng/mL",
+                 "referencia": "< 4,0 ou null"}]}
+
+Regras:
+- Use ponto como separador decimal.
+- Inclua todos os marcadores presentes, não só PSA e eTFG.
+- Se não houver nenhum exame legível, devolva {"marcadores": []}."""
+
+
+def _extrair_json(texto: str) -> dict | None:
+    """Lê o JSON da resposta do modelo, tolerando cercas de código."""
+    import json
+    t = texto.strip()
+    if t.startswith("```"):
+        t = t.split("```")[1] if "```" in t[3:] else t[3:]
+        t = t.removeprefix("json").strip()
+    ini, fim = t.find("{"), t.rfind("}")
+    if ini == -1 or fim <= ini:
+        return None
+    try:
+        return json.loads(t[ini:fim + 1])
+    except Exception as e:
+        logger.warning("JSON de extração inválido: %s", e)
+        return None
+
+
+async def registrar_marcadores(media_parts: list[dict]) -> list[dict]:
+    """
+    Relê o exame pedindo saída estruturada e grava cada marcador como fato
+    datado. Devolve os marcadores encontrados.
+    """
+    if not media_parts:
+        return []
+    try:
+        bruto = await chamar_modelo("", PROMPT_EXTRACAO, media_parts,
+                                    max_tokens=800, temperature=0.0,
+                                    reasoning=False)
+    except Exception as e:
+        logger.warning("Falha na extração de marcadores: %s", e)
+        return []
+
+    dados = _extrair_json(bruto)
+    if not dados:
+        return []
+
+    marcadores = dados.get("marcadores") or []
+    if not marcadores:
+        logger.info("Nenhum marcador laboratorial encontrado no documento.")
+        return []
+
+    data_exame = dados.get("data_exame") or datetime.now(timezone.utc).date().isoformat()
+    lab = dados.get("laboratorio") or ""
+
+    try:
+        from integrations.zep_memory import add_clinical_fact
+    except Exception as e:
+        logger.warning("Zep indisponível para gravar marcadores: %s", e)
+        return marcadores
+
+    gravados = 0
+    for m in marcadores:
+        nome, valor = m.get("nome"), m.get("valor")
+        if not nome or valor is None:
+            continue
+        unidade = m.get("unidade") or ""
+        ref = f" (ref: {m['referencia']})" if m.get("referencia") else ""
+        origem = f" — {lab}" if lab else ""
+        fato = f"{nome}: {valor} {unidade}".strip() + f" em {data_exame}{ref}{origem}"
+        if await add_clinical_fact(fato, "exame"):
+            gravados += 1
+            logger.info("Marcador registrado: %s", fato)
+
+    logger.info("Exame de %s: %d/%d marcadores gravados na memória.",
+                data_exame, gravados, len(marcadores))
+    return marcadores
+
+
 # ─── Detecção de alertas clínicos ────────────────────────────────────────────
 PSA_PATTERN   = re.compile(r'PSA[:\s]+(\d+[\.,]\d+)', re.IGNORECASE)
 ETFG_PATTERN  = re.compile(r'eTFG[:\s]+(\d+)', re.IGNORECASE)
@@ -811,6 +903,11 @@ async def responder(texto: str, media_parts: list[dict], tipo: str) -> str:
     resposta = await ask_dr_joao(texto, memoria, media_parts or None)
     await zep_save(texto, resposta, {"tipo": tipo})
     await check_clinical_alerts(resposta, "canal")
+
+    # Exame recebido: grava os valores em formato estruturado, para que a
+    # evolução possa ser comparada meses depois.
+    if tipo in ("image", "document") and media_parts:
+        await registrar_marcadores(media_parts)
     return resposta
 
 
@@ -1247,6 +1344,12 @@ async def chat_mensagem(request: Request):
     await zep_save(texto, resposta, {"canal": "chat_web", "tipo": tipo})
     await check_clinical_alerts(resposta, "chat_web")
 
+    # Exame recebido: grava os valores em formato estruturado, para permitir
+    # comparar a evolução meses depois.
+    marcadores = []
+    if tipo in ("image", "document") and media_parts:
+        marcadores = await registrar_marcadores(media_parts)
+
     # Áudio é opcional: se o ElevenLabs não estiver configurado, segue só o texto
     audio_b64 = ""
     if body.get("com_audio"):
@@ -1255,7 +1358,8 @@ async def chat_mensagem(request: Request):
             audio_b64 = base64.b64encode(audio).decode()
 
     return JSONResponse({"resposta": resposta, "audio_base64": audio_b64,
-                         "transcricao": texto if tipo == "audio" else ""})
+                         "transcricao": texto if tipo == "audio" else "",
+                         "marcadores": marcadores})
 
 
 @app.get("/chat", response_class=HTMLResponse)
@@ -1432,6 +1536,32 @@ async def modelos_disponiveis(request: Request):
         "modelo_em_uso": MODELO_ATUAL,
         "em_uso_disponivel": MODELO_ATUAL in disponiveis if disponiveis else None,
         "disponiveis": disponiveis,
+    })
+
+
+@app.get("/memoria/marcadores")
+async def historico_marcadores(request: Request, nome: str = ""):
+    """
+    Histórico dos marcadores laboratoriais registrados, em ordem cronológica.
+    ?nome=PSA filtra um marcador específico.
+    """
+    require_token(request)
+    try:
+        from integrations.zep_memory import get_facts
+        fatos = await get_facts("exame")
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Falha ao ler a memória: {e}")
+
+    if nome:
+        alvo = nome.lower()
+        fatos = [f for f in fatos if alvo in f.get("fact", "").lower()]
+
+    fatos.sort(key=lambda f: f.get("registrado_em", ""))
+    return JSONResponse({
+        "total": len(fatos),
+        "filtro": nome or None,
+        "marcadores": [{"registro": f.get("fact", ""),
+                        "gravado_em": f.get("registrado_em", "")} for f in fatos],
     })
 
 
