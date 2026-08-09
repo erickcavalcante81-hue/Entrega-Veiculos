@@ -31,7 +31,8 @@ BASE_URL="https://raw.githubusercontent.com/erickcavalcante81-hue/Home-Cabin-USA
 curl -fsSL -H 'Cache-Control: no-cache' \
   "${BASE_URL}/infra/docker-compose.yml?cb=$(date +%s)$$" -o docker-compose.yml
 
-if grep -q 'CONFIG_SESSION_PHONE_VERSION' docker-compose.yml; then
+if grep -q 'CONFIG_SESSION_PHONE_VERSION' docker-compose.yml \
+   && grep -q 'DATABASE_PROVIDER' docker-compose.yml; then
   echo "  docker-compose.yml atualizado ✓"
 else
   echo "  ⚠  Veio do cache do CDN. Aplicando correção localmente..."
@@ -49,6 +50,11 @@ if 'CONFIG_SESSION_PHONE_VERSION' not in s:
                   '      - DATABASE_SAVE_DATA_LABELS=false\n'
                   '      - CONFIG_SESSION_PHONE_VERSION=2.3000.1033773198\n'
                   '      - LOG_LEVEL=ERROR', 1)
+# Obrigatório no Evolution v2 — sua ausência mata o container em loop
+if 'DATABASE_PROVIDER' not in s:
+    s = s.replace('      - DATABASE_ENABLED=true',
+                  '      - DATABASE_ENABLED=true\n'
+                  '      - DATABASE_PROVIDER=postgresql', 1)
 open('/root/automacao/docker-compose.yml','w').write(s)
 print('  correção aplicada localmente ✓')
 PYEOF
@@ -79,8 +85,33 @@ for i in $(seq 1 24); do
 done
 
 if [ "$EVO_OK" = "false" ]; then
-  echo "  ✗ Evolution API não subiu. Logs:"
-  docker logs --tail 25 evolution_api 2>&1 | sed 's/^/    /'
+  echo ""
+  echo "  ✗ Evolution API não subiu."
+  LOGS=$(docker logs --tail 30 evolution_api 2>&1)
+
+  # Traduz as falhas de configuração mais comuns em instrução acionável
+  if echo "$LOGS" | grep -qi "Database provider.*invalid"; then
+    echo ""
+    echo "  DIAGNÓSTICO: DATABASE_PROVIDER ausente ou vazio."
+    echo "  O Evolution v2 exige essa variável. Corrija com:"
+    echo ""
+    echo "    grep -q '^DATABASE_PROVIDER=' .env || echo 'DATABASE_PROVIDER=postgresql' >> .env"
+    echo "    docker compose up -d --force-recreate evolution"
+    echo ""
+  elif echo "$LOGS" | grep -qiE "ECONNREFUSED|could not connect|connection refused"; then
+    echo ""
+    echo "  DIAGNÓSTICO: não conseguiu falar com o PostgreSQL."
+    echo "  Verifique:  docker compose ps postgres"
+    echo ""
+  elif echo "$LOGS" | grep -qi "does not exist"; then
+    echo ""
+    echo "  DIAGNÓSTICO: o banco da Evolution não existe. Crie com:"
+    echo "    docker exec postgres psql -U \$POSTGRES_USER -c \"CREATE DATABASE \$EVOLUTION_DB_NAME\""
+    echo ""
+  fi
+
+  echo "  Logs completos:"
+  echo "$LOGS" | sed 's/^/    /'
   exit 1
 fi
 

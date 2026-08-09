@@ -114,6 +114,10 @@ services:
       - AUTHENTICATION_API_KEY=${EVOLUTION_API_KEY}
       - AUTHENTICATION_EXPOSE_IN_FETCH_INSTANCES=true
       - DATABASE_ENABLED=true
+      # Obrigatório no Evolution v2 — sem isto o container morre em loop com
+      # "Error: Database provider  invalid." (a variável vazia aparece como
+      # espaço duplo na mensagem).
+      - DATABASE_PROVIDER=${DATABASE_PROVIDER:-postgresql}
       - DATABASE_CONNECTION_URI=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${EVOLUTION_DB_NAME}
       - DATABASE_CONNECTION_CLIENT_NAME=evolution
       - DATABASE_SAVE_DATA_INSTANCE=true
