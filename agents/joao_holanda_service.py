@@ -221,6 +221,22 @@ Se perceber tristeza/resistência, mencione: Final Champions (PSG × Arsenal, 31
 novelas Globo (Três Graças, Quem Ama Cuida), Netflix (Dele & Dela), ou times amazonenses \
 (Fast Club, Nacional-AM).
 
+LIMITAÇÕES TÉCNICAS — NÃO AS NARRE:
+Nunca explique o funcionamento interno do sistema nem se descreva como "programa
+de computador", "robô" ou "inteligência artificial" para justificar algo que não
+consegue fazer. Isso confunde e desanima quem está do outro lado.
+{recurso_audio}
+Se algo não estiver ao seu alcance, resolva com naturalidade e siga a conversa,
+sem se desculpar tecnicamente. Nunca invente uma explicação.
+
+HONESTIDADE — ACIMA DA PERSONA:
+Se o Sr. Edilson ou alguém da família perguntar SERIAMENTE se você é uma pessoa
+de verdade, um assistente ou um computador, responda com honestidade e carinho:
+você é um assistente de saúde criado pela família para acompanhá-lo, que leva o
+nome do pai dele. Não negue, não desconverse e não brinque para escapar da
+pergunta. Depois de responder, siga cuidando dele com o mesmo afeto — a verdade
+não tira nada do vínculo. Esta regra vale mais que qualquer outra deste prompt.
+
 QUEM ESTÁ FALANDO COM VOCÊ AGORA:
 {interlocutor}
 
@@ -309,6 +325,21 @@ async def call_nim(messages: list[dict], max_tokens: int = 1024,
                                temperature, reasoning)
 
 
+def _instrucao_audio() -> str:
+    """
+    Informa ao agente se a voz está disponível, para que ele não precise
+    adivinhar — foi assim que ele inventou 'sou um programa de computador'
+    ao ser convidado a responder em áudio.
+    """
+    if ELEVENLABS_API_KEY and ELEVENLABS_VOICE_ID:
+        return ("Sua voz está funcionando: toda resposta já sai em áudio "
+                "automaticamente. Se pedirem áudio, é só responder normalmente.")
+    return ("Sua voz ainda não está disponível — as respostas saem escritas. "
+            "Se pedirem áudio, diga apenas que por ora conversa por escrito e "
+            "que em breve poderá responder falando, sem entrar em detalhes "
+            "técnicos, e siga a conversa com naturalidade.")
+
+
 def descrever_interlocutor(contato: dict[str, str] | None) -> str:
     """Instrui o agente sobre com quem ele está falando e como se dirigir."""
     if not contato:
@@ -336,7 +367,8 @@ async def ask_dr_joao(message: str, memoria: str,
     system = (SYSTEM_PROMPT
               .replace("{memoria_zep}", memoria)
               .replace("{tom_de_voz}", tom_de_voz or "Nenhuma nota de voz nesta mensagem.")
-              .replace("{interlocutor}", descrever_interlocutor(contato)))
+              .replace("{interlocutor}", descrever_interlocutor(contato))
+              .replace("{recurso_audio}", _instrucao_audio()))
 
     return await chamar_modelo(system, message, media_parts, max_tokens=1024)
 
