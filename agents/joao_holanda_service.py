@@ -18,7 +18,7 @@ from typing import Any
 import httpx
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 
 # ─── Configuração ─────────────────────────────────────────────────────────────
 load_dotenv()
@@ -733,6 +733,108 @@ app = FastAPI(
 async def health():
     return {"status": "ok", "agent": "Dr. João Holanda Cavalcante",
             "paciente": "Sr. Edilson — Parintins, AM"}
+
+
+# ─── QR Code do WhatsApp ──────────────────────────────────────────────────────
+# Servido pelo próprio agente porque a porta dele já é publicada pelo Docker
+# (que escreve regras de iptables), enquanto um servidor HTTP avulso numa
+# porta nova fica bloqueado pelo firewall do host.
+async def _buscar_qr() -> dict:
+    """Consulta a Evolution API pelo QR Code / código de pareamento atual."""
+    async with httpx.AsyncClient(timeout=20) as client:
+        estado = {}
+        try:
+            r = await client.get(
+                f"{EVOLUTION_API_URL}/instance/connectionState/{WHATSAPP_INSTANCE}",
+                headers={"apikey": EVOLUTION_API_KEY})
+            if r.status_code == 200:
+                estado = r.json()
+        except Exception as e:
+            logger.warning("Falha ao ler estado da instância: %s", e)
+
+        if (estado.get("instance") or {}).get("state") == "open":
+            return {"conectado": True}
+
+        r = await client.get(
+            f"{EVOLUTION_API_URL}/instance/connect/{WHATSAPP_INSTANCE}",
+            headers={"apikey": EVOLUTION_API_KEY})
+        if r.status_code != 200:
+            return {"erro": f"HTTP {r.status_code}: {r.text[:200]}"}
+
+        d = r.json()
+        qr = d.get("qrcode", {}) if isinstance(d.get("qrcode"), dict) else {}
+        return {
+            "conectado": False,
+            "base64": d.get("base64") or qr.get("base64", ""),
+            "code": d.get("code") or qr.get("code", ""),
+            "pairingCode": d.get("pairingCode") or qr.get("pairingCode", ""),
+        }
+
+
+@app.get("/qrcode.png")
+async def qrcode_png():
+    """Devolve o QR Code como imagem PNG, para abrir direto no navegador."""
+    info = await _buscar_qr()
+    b64 = info.get("base64", "")
+    if not b64:
+        raise HTTPException(status_code=404,
+                            detail="QR indisponível (instância já conectada?)")
+    try:
+        png = base64.b64decode(b64.split(",", 1)[-1])
+    except Exception:
+        raise HTTPException(status_code=500, detail="QR em formato inesperado")
+    return Response(content=png, media_type="image/png",
+                    headers={"Cache-Control": "no-store"})
+
+
+@app.get("/qrcode", response_class=HTMLResponse)
+async def qrcode_page():
+    """
+    Página que exibe o QR Code e se atualiza sozinha a cada 30 segundos —
+    o QR do WhatsApp expira em cerca de um minuto.
+    """
+    info = await _buscar_qr()
+
+    if info.get("conectado"):
+        corpo = ("<h1>✅ WhatsApp conectado</h1>"
+                 "<p>O Dr. João Holanda já está no ar e pode receber mensagens.</p>")
+        refresh = ""
+    elif info.get("erro"):
+        corpo = f"<h1>⚠️ Erro</h1><pre>{info['erro']}</pre>"
+        refresh = '<meta http-equiv="refresh" content="10">'
+    else:
+        pareamento = ""
+        if info.get("pairingCode"):
+            pareamento = (f"<p class='alt'>Ou use o código de pareamento: "
+                          f"<code>{info['pairingCode']}</code><br>"
+                          f"<small>WhatsApp → Aparelhos conectados → "
+                          f"Conectar com número de telefone</small></p>")
+        corpo = (f"<h1>Conectar o WhatsApp</h1>"
+                 f"<img src='/qrcode.png?t=0' alt='QR Code'>"
+                 f"<p><small>Atualiza sozinho a cada 30s — o QR expira em ~1 min.</small></p>"
+                 f"{pareamento}")
+        refresh = '<meta http-equiv="refresh" content="30">'
+
+    return f"""<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+{refresh}<title>Dr. João Holanda — Conectar WhatsApp</title>
+<style>
+  body {{ font-family: system-ui, sans-serif; text-align: center;
+         padding: 2rem 1rem; background: #0f1115; color: #e6e6e6; }}
+  h1 {{ font-size: 1.4rem; font-weight: 600; }}
+  img {{ width: min(320px, 80vw); background: #fff; padding: 12px;
+        border-radius: 12px; margin: 1rem 0; }}
+  code {{ background: #1e2128; padding: 4px 10px; border-radius: 6px;
+         font-size: 1.2rem; letter-spacing: 2px; }}
+  .alt {{ margin-top: 1.5rem; color: #b8b8b8; }}
+  small {{ color: #8a8a8a; }}
+  pre {{ text-align: left; background: #1e2128; padding: 1rem;
+        border-radius: 8px; overflow-x: auto; }}
+</style></head>
+<body>{corpo}
+<p><small>Sr. Edilson — Parintins, AM</small></p>
+</body></html>"""
 
 
 @app.post("/webhook/whatsapp")
