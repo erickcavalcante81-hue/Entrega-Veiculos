@@ -892,8 +892,31 @@ app = FastAPI(
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "agent": "Dr. João Holanda Cavalcante",
-            "paciente": "Sr. Edilson — Parintins, AM"}
+    """
+    Estado do agente. Inclui os recursos ativos para que dê para saber, sem
+    entrar no container, qual versão do código está de fato rodando.
+    """
+    try:
+        import fitz  # noqa: F401
+        leitura_pdf = True
+    except ImportError:
+        leitura_pdf = False
+
+    return {
+        "status": "ok",
+        "agent": "Dr. João Holanda Cavalcante",
+        "paciente": "Sr. Edilson — Parintins, AM",
+        "modelo": NIM_CHAT_MODEL,
+        "recursos": {
+            "leitura_pdf": leitura_pdf,
+            "chat_web": True,
+            "telegram": bool(TELEGRAM_BOT_TOKEN),
+            "whatsapp": bool(EVOLUTION_API_KEY),
+            "voz_elevenlabs": bool(ELEVENLABS_API_KEY and ELEVENLABS_VOICE_ID),
+            "memoria_zep": bool(ZEP_API_KEY),
+            "autenticacao": bool(AGENT_ACCESS_TOKEN),
+        },
+    }
 
 
 # ─── QR Code do WhatsApp ──────────────────────────────────────────────────────
@@ -1254,10 +1277,16 @@ async def chat_mensagem(request: Request):
 
 @app.get("/chat", response_class=HTMLResponse)
 async def chat_page(request: Request):
-    """Interface de chat com o Dr. João Holanda — texto, voz e imagem."""
+    """Interface de chat com o Dr. João Holanda — texto, voz, foto e PDF."""
     require_token(request)
     tk = request.query_params.get("token", "")
-    return CHAT_HTML.replace("__TOKEN__", tk)
+    # Sem cache: a página carrega o JavaScript embutido, e uma versão antiga
+    # guardada pelo navegador continuaria enviando mídia no formato errado.
+    return HTMLResponse(
+        CHAT_HTML.replace("__TOKEN__", tk),
+        headers={"Cache-Control": "no-store, no-cache, must-revalidate",
+                 "Pragma": "no-cache"},
+    )
 
 
 CHAT_HTML = """<!doctype html>
