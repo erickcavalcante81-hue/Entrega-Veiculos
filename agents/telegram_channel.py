@@ -46,6 +46,7 @@ class TelegramChannel:
         allowed_ids: set[int],
         handler: Callable[[str, list[dict], str], Awaitable[str]],
         build_media_part: Callable[[str, bytes, str], dict],
+        blocos_de_documento: Optional[Callable[[bytes, str], list[dict]]] = None,
         to_wav: Optional[Callable[[bytes], Awaitable[Optional[bytes]]]] = None,
         to_ogg: Optional[Callable[[bytes], Awaitable[Optional[bytes]]]] = None,
         tts: Optional[Callable[[str], Awaitable[Optional[bytes]]]] = None,
@@ -55,6 +56,9 @@ class TelegramChannel:
         self.allowed_ids = allowed_ids
         self.handler = handler
         self.build_media_part = build_media_part
+        # Sem conversor de documento, trata tudo como imagem (PDF falharia)
+        self.blocos_de_documento = blocos_de_documento or (
+            lambda raw, mime: [build_media_part("image", raw, mime)])
         self.to_wav = to_wav
         self.to_ogg = to_ogg
         self.tts = tts
@@ -167,14 +171,16 @@ class TelegramChannel:
             if not bruto:
                 return "", partes, "document"
             mime = doc.get("mime_type", "application/pdf").split(";")[0]
-            # O Omni lê PDF e imagem pelo mesmo canal visual
-            partes.append(self.build_media_part("image", bruto, mime))
+            # PDF vira uma imagem por página — o Omni não aceita PDF direto
+            partes.extend(self.blocos_de_documento(bruto, mime))
+            if not partes:
+                return "", partes, "document"
             nome = doc.get("file_name", "documento")
             texto = legenda or (
-                f"O Sr. Edilson enviou o documento '{nome}'. Leia o conteúdo. "
-                f"Se for um exame laboratorial, extraia os marcadores (PSA, eTFG, "
-                f"creatinina) com seus valores e interprete-os segundo as regras "
-                f"clínicas."
+                f"O Sr. Edilson enviou o documento '{nome}' ({len(partes)} página(s)). "
+                f"Leia o conteúdo. Se for um exame laboratorial, extraia os "
+                f"marcadores (PSA, eTFG, creatinina) com seus valores e "
+                f"interprete-os segundo as regras clínicas."
             )
             return texto, partes, "document"
 

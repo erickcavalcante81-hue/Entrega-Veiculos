@@ -461,6 +461,61 @@ async def ogg_to_wav(audio_data: bytes) -> bytes | None:
         return None
 
 
+# ─── Documentos (PDF de exames) ───────────────────────────────────────────────
+# O Nemotron Omni lê imagem e vídeo, mas recusa PDF: enviar um data URI
+# application/pdf devolve "Failed to load image". As páginas precisam virar
+# imagem antes. A renderização é feita em memória — exame é dado clínico e
+# não deve ficar em disco, mesma regra dos frames da câmera.
+PDF_MAX_PAGINAS = int(os.getenv("PDF_MAX_PAGINAS", "6"))
+PDF_DPI         = int(os.getenv("PDF_DPI", "160"))   # legível para valores pequenos
+
+
+def pdf_para_imagens(pdf_bytes: bytes) -> list[bytes]:
+    """Renderiza as páginas do PDF como PNG. Devolve lista vazia se falhar."""
+    try:
+        import fitz  # PyMuPDF
+    except ImportError:
+        logger.error("PyMuPDF ausente — não é possível ler PDF. "
+                     "Adicione 'pymupdf' ao requirements.txt e refaça o build.")
+        return []
+
+    paginas: list[bytes] = []
+    try:
+        with fitz.open(stream=pdf_bytes, filetype="pdf") as doc:
+            total = doc.page_count
+            if total > PDF_MAX_PAGINAS:
+                logger.warning("PDF com %d páginas — lendo apenas as %d primeiras.",
+                               total, PDF_MAX_PAGINAS)
+            for i in range(min(total, PDF_MAX_PAGINAS)):
+                pix = doc.load_page(i).get_pixmap(dpi=PDF_DPI)
+                paginas.append(pix.tobytes("png"))
+    except Exception as e:
+        logger.warning("Falha ao renderizar o PDF: %s", e)
+        return []
+
+    logger.info("PDF convertido: %d página(s) em imagem", len(paginas))
+    return paginas
+
+
+def blocos_de_documento(raw: bytes, mime: str) -> list[dict]:
+    """
+    Prepara qualquer documento para o modelo: PDF vira uma imagem por página,
+    imagem segue direto. Usado por Telegram, chat web e WhatsApp.
+    """
+    mime = (mime or "").split(";")[0].strip().lower()
+
+    if mime == "application/pdf" or raw[:5] == b"%PDF-":
+        return [build_media_part("image", png, "image/png")
+                for png in pdf_para_imagens(raw)]
+
+    if mime.startswith("image/"):
+        return [build_media_part("image", raw, mime)]
+
+    # Tipo desconhecido: tenta como imagem, que é o caso mais provável
+    logger.warning("Tipo de documento não reconhecido (%s) — tratando como imagem", mime)
+    return [build_media_part("image", raw, "image/jpeg")]
+
+
 async def to_ogg_opus(audio_data: bytes) -> bytes | None:
     """
     Converte o áudio do ElevenLabs (MP3) para OGG/Opus, formato exigido
@@ -802,6 +857,7 @@ async def lifespan(app: FastAPI):
             allowed_ids=TELEGRAM_ALLOWED_IDS,
             handler=responder,
             build_media_part=build_media_part,
+            blocos_de_documento=blocos_de_documento,
             to_wav=ogg_to_wav,
             to_ogg=to_ogg_opus,
             tts=text_to_speech,
@@ -1057,9 +1113,12 @@ async def whatsapp_webhook(request: Request):
             return JSONResponse({"status": "media_download_failed"})
 
         mime = doc.get("mimetype", "application/pdf").split(";")[0]
-        # O Omni lê PDF e imagem pelo mesmo canal visual
-        media_parts.append(build_media_part("image", raw, mime))
-        message_text = (f"O Sr. Edilson enviou o documento '{caption}'. "
+        # PDF vira uma imagem por página; imagem segue direto
+        media_parts.extend(blocos_de_documento(raw, mime))
+        if not media_parts:
+            return JSONResponse({"status": "documento_ilegivel"})
+        message_text = (f"O Sr. Edilson enviou o documento '{caption}' "
+                        f"({len(media_parts)} página(s)). "
                         f"Leia o conteúdo. Se for um exame laboratorial, extraia "
                         f"os marcadores (PSA, eTFG, creatinina) com seus valores e "
                         f"interprete-os segundo as regras clínicas.")
@@ -1131,6 +1190,8 @@ async def chat_mensagem(request: Request):
             raise HTTPException(status_code=400, detail="Mídia em base64 inválida")
 
         tipo = kind
+        mime = (midia.get("mime") or "").split(";")[0]
+
         if kind == "audio":
             # O navegador grava em webm/ogg; o Omni espera WAV
             wav = await ogg_to_wav(raw)
@@ -1139,15 +1200,32 @@ async def chat_mensagem(request: Request):
             if not texto:
                 texto = await transcribe_audio(raw)
             media_parts.append(build_media_part("audio", wav, "audio/wav"))
-        else:
-            mime = midia.get("mime") or ("image/jpeg" if kind == "image" else "video/mp4")
-            media_parts.append(build_media_part(kind, raw, mime.split(";")[0]))
+
+        elif kind == "video":
+            media_parts.append(build_media_part("video", raw, mime or "video/mp4"))
             if not texto:
+                texto = "Observe este vídeo e comente com acolhimento."
+
+        else:
+            # Imagem ou PDF — o PDF é renderizado como uma imagem por página
+            e_pdf = mime == "application/pdf" or raw[:5] == b"%PDF-"
+            media_parts.extend(blocos_de_documento(raw, mime or "image/jpeg"))
+            if not media_parts:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Não consegui ler esse arquivo. Se for um PDF protegido "
+                           "por senha ou digitalizado, tente enviar como foto.")
+            if e_pdf:
+                tipo = "document"
+                texto = texto or (
+                    "O Sr. Edilson enviou um exame em PDF (uma imagem por página). "
+                    "Leia todas as páginas, extraia os marcadores (PSA, eTFG, "
+                    "creatinina) com seus valores e interprete-os segundo as "
+                    "regras clínicas.")
+            elif not texto:
                 texto = ("Analise esta imagem: se for uma refeição, avalie do ponto de "
                          "vista nutricional considerando as restrições renais e "
-                         "oncológicas; se for um exame, leia os valores e interprete."
-                         if kind == "image" else
-                         "Observe este vídeo e comente com acolhimento.")
+                         "oncológicas; se for um exame, leia os valores e interprete.")
 
     if not texto and not media_parts:
         raise HTTPException(status_code=400, detail="Envie texto ou mídia")
@@ -1220,7 +1298,7 @@ CHAT_HTML = """<!doctype html>
 <div id="log"></div>
 <footer>
   <label class="file" style="width:46px;height:46px;border-radius:50%">📎
-    <input type="file" id="arq" accept="image/*,video/*">
+    <input type="file" id="arq" accept="image/*,video/*,application/pdf,.pdf">
   </label>
   <input id="txt" placeholder="Escreva sua mensagem..." autocomplete="off">
   <button id="mic" title="Gravar áudio">🎤</button>
@@ -1273,9 +1351,12 @@ arq.onchange = () => {
   const f = arq.files[0]; if (!f) return;
   const fr = new FileReader();
   fr.onload = () => {
+    // PDF entra como 'image': o servidor renderiza cada página e envia ao modelo
+    const ehPdf = f.type === 'application/pdf' || /\.pdf$/i.test(f.name);
     const tipo = f.type.startsWith('video') ? 'video' : 'image';
-    enviar(txt.value.trim(), {tipo, base64: fr.result.split(',')[1], mime: f.type},
-           tipo === 'image' ? fr.result : null);
+    enviar(txt.value.trim(),
+           {tipo, base64: fr.result.split(',')[1], mime: f.type || (ehPdf ? 'application/pdf' : '')},
+           (tipo === 'image' && !ehPdf) ? fr.result : null);
     arq.value = '';
   };
   fr.readAsDataURL(f);

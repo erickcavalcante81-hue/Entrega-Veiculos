@@ -3,3 +3,6 @@ uvicorn[standard]==0.30.6
 httpx==0.27.2
 python-dotenv==1.0.1
 pydantic==2.8.2
+# Renderiza páginas de PDF (exames laboratoriais) como imagem, em memória.
+# O Nemotron Omni lê imagem e vídeo, mas não aceita PDF diretamente.
+pymupdf==1.24.14
