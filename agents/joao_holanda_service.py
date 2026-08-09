@@ -11,6 +11,7 @@ import base64
 import logging
 import os
 import re
+import secrets
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Any
@@ -52,6 +53,30 @@ NIM_REASONING_BUDGET = int(os.getenv("NIM_REASONING_BUDGET", "4096"))
 # Número do Sr. Edilson (ou grupo familiar)
 EDILSON_PHONE      = os.getenv("EDILSON_PHONE", "")      # ex: 5592999999999
 FAMILY_GROUP_ID    = os.getenv("N8N_FAMILY_GROUP_WA_ID", "")
+
+# ─── Controle de acesso ───────────────────────────────────────────────────────
+# A porta do agente é publicada na internet. Endpoints que expõem dado clínico
+# do Sr. Edilson, o chat ou o QR de pareamento do WhatsApp exigem este token.
+# Aceito via header "X-Agent-Token" ou parâmetro ?token= (para abrir no navegador).
+AGENT_ACCESS_TOKEN = os.getenv("AGENT_ACCESS_TOKEN", "")
+
+
+def require_token(request: Request) -> None:
+    """
+    Valida o token de acesso. Sem token configurado, libera o acesso mas
+    registra aviso — para não quebrar instalações existentes durante a
+    atualização. Configure AGENT_ACCESS_TOKEN no .env assim que possível.
+    """
+    if not AGENT_ACCESS_TOKEN:
+        logger.warning("AGENT_ACCESS_TOKEN não configurado — endpoint sensível "
+                       "acessível sem autenticação em %s", request.url.path)
+        return
+
+    enviado = (request.headers.get("X-Agent-Token")
+               or request.query_params.get("token", ""))
+    # compare_digest evita vazar o token por diferença de tempo de resposta
+    if not enviado or not secrets.compare_digest(enviado, AGENT_ACCESS_TOKEN):
+        raise HTTPException(status_code=401, detail="Token de acesso inválido")
 
 
 # ─── Lista de contatos autorizados ────────────────────────────────────────────
@@ -772,8 +797,9 @@ async def _buscar_qr() -> dict:
 
 
 @app.get("/qrcode.png")
-async def qrcode_png():
+async def qrcode_png(request: Request):
     """Devolve o QR Code como imagem PNG, para abrir direto no navegador."""
+    require_token(request)
     info = await _buscar_qr()
     b64 = info.get("base64", "")
     if not b64:
@@ -788,11 +814,12 @@ async def qrcode_png():
 
 
 @app.get("/qrcode", response_class=HTMLResponse)
-async def qrcode_page():
+async def qrcode_page(request: Request):
     """
     Página que exibe o QR Code e se atualiza sozinha a cada 30 segundos —
     o QR do WhatsApp expira em cerca de um minuto.
     """
+    require_token(request)
     info = await _buscar_qr()
 
     if info.get("conectado"):
@@ -809,8 +836,11 @@ async def qrcode_page():
                           f"<code>{info['pairingCode']}</code><br>"
                           f"<small>WhatsApp → Aparelhos conectados → "
                           f"Conectar com número de telefone</small></p>")
+        # Repassa o token à imagem, já que ela também é protegida
+        tk = request.query_params.get("token", "")
+        img_src = f"/qrcode.png?token={tk}" if tk else "/qrcode.png"
         corpo = (f"<h1>Conectar o WhatsApp</h1>"
-                 f"<img src='/qrcode.png?t=0' alt='QR Code'>"
+                 f"<img src='{img_src}' alt='QR Code'>"
                  f"<p><small>Atualiza sozinho a cada 30s — o QR expira em ~1 min.</small></p>"
                  f"{pareamento}")
         refresh = '<meta http-equiv="refresh" content="30">'
@@ -991,9 +1021,213 @@ async def camera_webhook(request: Request):
     return JSONResponse({"status": "ok", "event": event_type})
 
 
+# ─── Canal alternativo: chat web ─────────────────────────────────────────────
+# Permite conversar com o Dr. João Holanda sem WhatsApp — útil para a família,
+# para testar antes do pareamento e como contingência se o WhatsApp cair.
+# Aceita texto, nota de voz e imagem, passando pelo mesmo pipeline multimodal.
+@app.post("/chat/mensagem")
+async def chat_mensagem(request: Request):
+    """
+    Recebe uma mensagem pelo chat web e devolve a resposta do Dr. João Holanda.
+    Corpo: {"texto": "...", "midia": {"tipo": "audio|image|video",
+                                      "base64": "...", "mime": "..."}}
+    Diferente do WhatsApp, responde de forma síncrona — quem enviou espera a resposta.
+    """
+    require_token(request)
+    body = await request.json()
+    texto = (body.get("texto") or "").strip()
+    midia = body.get("midia") or {}
+
+    media_parts: list[dict] = []
+    tipo = "texto"
+
+    if midia.get("base64"):
+        kind = midia.get("tipo", "image")
+        if kind not in MEDIA_PART_TYPES:
+            raise HTTPException(status_code=400, detail=f"Tipo de mídia inválido: {kind}")
+        try:
+            raw = base64.b64decode(midia["base64"].split(",", 1)[-1])
+        except Exception:
+            raise HTTPException(status_code=400, detail="Mídia em base64 inválida")
+
+        tipo = kind
+        if kind == "audio":
+            # O navegador grava em webm/ogg; o Omni espera WAV
+            wav = await ogg_to_wav(raw)
+            if not wav:
+                raise HTTPException(status_code=400, detail="Falha ao converter o áudio")
+            if not texto:
+                texto = await transcribe_audio(raw)
+            media_parts.append(build_media_part("audio", wav, "audio/wav"))
+        else:
+            mime = midia.get("mime") or ("image/jpeg" if kind == "image" else "video/mp4")
+            media_parts.append(build_media_part(kind, raw, mime.split(";")[0]))
+            if not texto:
+                texto = ("Analise esta imagem: se for uma refeição, avalie do ponto de "
+                         "vista nutricional considerando as restrições renais e "
+                         "oncológicas; se for um exame, leia os valores e interprete."
+                         if kind == "image" else
+                         "Observe este vídeo e comente com acolhimento.")
+
+    if not texto and not media_parts:
+        raise HTTPException(status_code=400, detail="Envie texto ou mídia")
+
+    memoria = await zep_get_context()
+    try:
+        resposta = await ask_dr_joao(texto, memoria, media_parts or None)
+    except Exception as e:
+        logger.error("Erro na inferência NIM (chat): %s", e)
+        raise HTTPException(status_code=502, detail=f"Falha ao consultar o modelo: {e}")
+
+    # Persiste e verifica marcadores, igual ao fluxo do WhatsApp
+    await zep_save(texto, resposta, {"canal": "chat_web", "tipo": tipo})
+    await check_clinical_alerts(resposta, "chat_web")
+
+    # Áudio é opcional: se o ElevenLabs não estiver configurado, segue só o texto
+    audio_b64 = ""
+    if body.get("com_audio"):
+        audio = await text_to_speech(resposta)
+        if audio:
+            audio_b64 = base64.b64encode(audio).decode()
+
+    return JSONResponse({"resposta": resposta, "audio_base64": audio_b64,
+                         "transcricao": texto if tipo == "audio" else ""})
+
+
+@app.get("/chat", response_class=HTMLResponse)
+async def chat_page(request: Request):
+    """Interface de chat com o Dr. João Holanda — texto, voz e imagem."""
+    require_token(request)
+    tk = request.query_params.get("token", "")
+    return CHAT_HTML.replace("__TOKEN__", tk)
+
+
+CHAT_HTML = """<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dr. João Holanda Cavalcante</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: system-ui, -apple-system, sans-serif;
+         background:#0f1115; color:#e9e9e9; display:flex; flex-direction:column;
+         height:100dvh; font-size:17px; }
+  header { padding:14px 16px; background:#161a21; border-bottom:1px solid #262b35; }
+  header b { font-size:1.05rem; } header span { color:#8b93a1; font-size:.85rem; }
+  #log { flex:1; overflow-y:auto; padding:16px; display:flex;
+         flex-direction:column; gap:12px; }
+  .m { max-width:82%; padding:11px 15px; border-radius:16px; line-height:1.5;
+       white-space:pre-wrap; word-wrap:break-word; }
+  .eu { align-self:flex-end; background:#2563eb; border-bottom-right-radius:4px; }
+  .dr { align-self:flex-start; background:#1e232c; border-bottom-left-radius:4px; }
+  .sys { align-self:center; color:#8b93a1; font-size:.85rem; font-style:italic; }
+  .m img { max-width:100%; border-radius:10px; margin-top:6px; display:block; }
+  footer { padding:12px; background:#161a21; border-top:1px solid #262b35;
+           display:flex; gap:8px; align-items:center; }
+  #txt { flex:1; padding:12px 14px; border-radius:22px; border:1px solid #333a46;
+         background:#0f1115; color:#e9e9e9; font-size:17px; outline:none; }
+  #txt:focus { border-color:#2563eb; }
+  button { border:0; border-radius:50%; width:46px; height:46px; font-size:20px;
+           cursor:pointer; background:#2563eb; color:#fff; flex-shrink:0; }
+  button:disabled { opacity:.45; cursor:default; }
+  button.rec { background:#dc2626; animation:pulse 1.2s infinite; }
+  @keyframes pulse { 50% { opacity:.55; } }
+  label.file { background:#333a46; display:grid; place-items:center; }
+  input[type=file] { display:none; }
+</style></head>
+<body>
+<header><b>Dr. João Holanda Cavalcante</b><br>
+<span>Acompanhamento do Sr. Edilson — Parintins, AM</span></header>
+<div id="log"></div>
+<footer>
+  <label class="file" style="width:46px;height:46px;border-radius:50%">📎
+    <input type="file" id="arq" accept="image/*,video/*">
+  </label>
+  <input id="txt" placeholder="Escreva sua mensagem..." autocomplete="off">
+  <button id="mic" title="Gravar áudio">🎤</button>
+  <button id="env" title="Enviar">➤</button>
+</footer>
+<script>
+const TOKEN = "__TOKEN__";
+const log = document.getElementById('log');
+const txt = document.getElementById('txt');
+const env = document.getElementById('env');
+const mic = document.getElementById('mic');
+const arq = document.getElementById('arq');
+
+function bolha(classe, texto, imgSrc) {
+  const d = document.createElement('div');
+  d.className = 'm ' + classe;
+  d.textContent = texto;
+  if (imgSrc) { const i = new Image(); i.src = imgSrc; d.appendChild(i); }
+  log.appendChild(d); log.scrollTop = log.scrollHeight;
+  return d;
+}
+
+async function enviar(texto, midia, preview) {
+  if (!texto && !midia) return;
+  bolha('eu', texto || (midia.tipo === 'audio' ? '🎤 Áudio' : '🖼️ Anexo'), preview);
+  txt.value = ''; env.disabled = true; mic.disabled = true;
+  const pensando = bolha('sys', 'Dr. João está ouvindo...');
+
+  try {
+    const r = await fetch('/chat/mensagem' + (TOKEN ? '?token=' + encodeURIComponent(TOKEN) : ''), {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-Agent-Token': TOKEN},
+      body: JSON.stringify({texto, midia, com_audio: true})
+    });
+    pensando.remove();
+    if (!r.ok) { bolha('sys', 'Erro ' + r.status + ': ' + (await r.text()).slice(0, 200)); return; }
+    const d = await r.json();
+    if (d.transcricao) bolha('sys', '“' + d.transcricao + '”');
+    bolha('dr', d.resposta);
+    if (d.audio_base64) new Audio('data:audio/mpeg;base64,' + d.audio_base64).play().catch(()=>{});
+  } catch (e) {
+    pensando.remove(); bolha('sys', 'Falha de conexão: ' + e.message);
+  } finally { env.disabled = false; mic.disabled = false; txt.focus(); }
+}
+
+env.onclick = () => enviar(txt.value.trim(), null, null);
+txt.onkeydown = e => { if (e.key === 'Enter') env.click(); };
+
+arq.onchange = () => {
+  const f = arq.files[0]; if (!f) return;
+  const fr = new FileReader();
+  fr.onload = () => {
+    const tipo = f.type.startsWith('video') ? 'video' : 'image';
+    enviar(txt.value.trim(), {tipo, base64: fr.result.split(',')[1], mime: f.type},
+           tipo === 'image' ? fr.result : null);
+    arq.value = '';
+  };
+  fr.readAsDataURL(f);
+};
+
+let rec = null, chunks = [];
+mic.onclick = async () => {
+  if (rec && rec.state === 'recording') { rec.stop(); return; }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({audio: true});
+    chunks = []; rec = new MediaRecorder(stream);
+    rec.ondataavailable = e => chunks.push(e.data);
+    rec.onstop = () => {
+      stream.getTracks().forEach(t => t.stop());
+      mic.classList.remove('rec'); mic.textContent = '🎤';
+      const fr = new FileReader();
+      fr.onload = () => enviar('', {tipo: 'audio', base64: fr.result.split(',')[1],
+                                    mime: 'audio/webm'}, null);
+      fr.readAsDataURL(new Blob(chunks));
+    };
+    rec.start(); mic.classList.add('rec'); mic.textContent = '⏹';
+  } catch (e) { bolha('sys', 'Microfone indisponível: ' + e.message); }
+};
+
+bolha('sys', 'Converse com o Dr. João Holanda por texto, voz ou foto.');
+</script></body></html>"""
+
+
 @app.post("/memoria/fato")
 async def add_fact(request: Request):
     """Adiciona fato clínico diretamente à memória do Sr. Edilson."""
+    require_token(request)
     body = await request.json()
     fact = body.get("fato", "")
     category = body.get("categoria", "clinico")
@@ -1009,8 +1243,9 @@ async def add_fact(request: Request):
 
 
 @app.get("/memoria/contexto")
-async def get_memory_context():
+async def get_memory_context(request: Request):
     """Retorna o contexto atual da memória do Sr. Edilson."""
+    require_token(request)
     memoria = await zep_get_context()
     return JSONResponse({"contexto": memoria})
 

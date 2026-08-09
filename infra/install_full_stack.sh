@@ -31,6 +31,8 @@ add_env "NVIDIA_NIM_API_KEY"     ""
 add_env "NIM_CHAT_MODEL"         "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning"
 add_env "NIM_REASONING_BUDGET"   "4096"
 add_env "AGENT_HOST_PORT"        "3001"
+# Protege /chat, /qrcode e /memoria/* — a porta do agente é pública
+add_env "AGENT_ACCESS_TOKEN"     "$(openssl rand -hex 16)"
 add_env "VOZ_ALERTA_LIMIAR"      "3"
 add_env "EXTRA_ALLOWED_NUMBERS"  ""
 add_env "EDILSON_PHONE"          ""
