@@ -1,0 +1,588 @@
+{
+  "name": "Dr. João Holanda — WhatsApp Entrada Multimodal",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "whatsapp-webhook",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "node_webhook_entry",
+      "name": "Webhook WhatsApp Entrada",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [240, 400],
+      "webhookId": "whatsapp-webhook-edilson"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: \"received\" }) }}",
+        "options": {}
+      },
+      "id": "node_ack_200",
+      "name": "ACK 200 (Evolution API)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [460, 240]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": { "caseSensitive": false, "leftValue": "", "typeValidation": "strict" },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.body.message.messageStubType }}",
+                    "rightValue": "REVOKE",
+                    "operator": { "type": "string", "operation": "equals" }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "ignorar"
+            },
+            {
+              "conditions": {
+                "options": { "caseSensitive": false },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.body.message.message.conversation !== undefined || $json.body.message.message.extendedTextMessage !== undefined }}",
+                    "rightValue": "true",
+                    "operator": { "type": "string", "operation": "equals" }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "texto"
+            },
+            {
+              "conditions": {
+                "options": { "caseSensitive": false },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.body.message.message.audioMessage !== undefined || $json.body.message.message.pttMessage !== undefined }}",
+                    "rightValue": "true",
+                    "operator": { "type": "string", "operation": "equals" }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "audio"
+            },
+            {
+              "conditions": {
+                "options": { "caseSensitive": false },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.body.message.message.imageMessage !== undefined || $json.body.message.message.documentMessage !== undefined }}",
+                    "rightValue": "true",
+                    "operator": { "type": "string", "operation": "equals" }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "midia"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node_switch_type",
+      "name": "Switch — Tipo de Mensagem",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [680, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extrai campos essenciais de mensagens de texto (Evolution API v2)\nconst body = $input.item.json.body;\nconst msg = body.message;\n\nconst from = msg.key?.remoteJid ?? '';\nconst pushName = msg.pushName ?? 'Paciente';\nconst timestamp = msg.messageTimestamp ?? Date.now();\n\nlet text = '';\nif (msg.message?.conversation) {\n  text = msg.message.conversation;\n} else if (msg.message?.extendedTextMessage?.text) {\n  text = msg.message.extendedTextMessage.text;\n}\n\nreturn [\n  {\n    json: {\n      from,\n      pushName,\n      timestamp,\n      messageType: 'text',\n      content: text,\n      rawMessage: msg\n    }\n  }\n];"
+      },
+      "id": "node_parse_text",
+      "name": "Parse — Extrair Texto",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [920, 240]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extrai metadados do áudio e a URL de download (Evolution API v2)\nconst body = $input.item.json.body;\nconst msg = body.message;\n\nconst from = msg.key?.remoteJid ?? '';\nconst pushName = msg.pushName ?? 'Paciente';\nconst timestamp = msg.messageTimestamp ?? Date.now();\n\nconst audioMsg = msg.message?.audioMessage ?? msg.message?.pttMessage ?? {};\nconst mediaUrl = audioMsg.url ?? '';\nconst mimetype = audioMsg.mimetype ?? 'audio/ogg; codecs=opus';\nconst fileLength = audioMsg.fileLength ?? 0;\nconst seconds = audioMsg.seconds ?? 0;\n\nreturn [\n  {\n    json: {\n      from,\n      pushName,\n      timestamp,\n      messageType: 'audio',\n      mediaUrl,\n      mimetype,\n      fileLength,\n      durationSeconds: seconds,\n      rawMessage: msg\n    }\n  }\n];"
+      },
+      "id": "node_parse_audio",
+      "name": "Parse — Extrair Áudio",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [920, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extrai metadados de imagem ou documento PDF (Evolution API v2)\nconst body = $input.item.json.body;\nconst msg = body.message;\n\nconst from = msg.key?.remoteJid ?? '';\nconst pushName = msg.pushName ?? 'Paciente';\nconst timestamp = msg.messageTimestamp ?? Date.now();\n\nconst imageMsg = msg.message?.imageMessage;\nconst docMsg = msg.message?.documentMessage;\n\nlet mediaUrl = '';\nlet mimetype = '';\nlet caption = '';\nlet mediaType = 'image';\n\nif (imageMsg) {\n  mediaUrl = imageMsg.url ?? '';\n  mimetype = imageMsg.mimetype ?? 'image/jpeg';\n  caption = imageMsg.caption ?? '';\n  mediaType = 'image';\n} else if (docMsg) {\n  mediaUrl = docMsg.url ?? '';\n  mimetype = docMsg.mimetype ?? 'application/pdf';\n  caption = docMsg.caption ?? docMsg.fileName ?? '';\n  mediaType = 'document';\n}\n\nreturn [\n  {\n    json: {\n      from,\n      pushName,\n      timestamp,\n      messageType: mediaType,\n      mediaUrl,\n      mimetype,\n      caption,\n      rawMessage: msg\n    }\n  }\n];"
+      },
+      "id": "node_parse_media",
+      "name": "Parse — Extrair Mídia",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [920, 560]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.EVOLUTION_API_URL }}/message/downloadMedia/{{ $env.WHATSAPP_INSTANCE_NAME }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.EVOLUTION_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "message",
+              "value": "={{ JSON.stringify($json.rawMessage) }}"
+            }
+          ]
+        },
+        "options": {
+          "response": { "response": { "responseFormat": "file" } }
+        }
+      },
+      "id": "node_download_audio",
+      "name": "Download Áudio (Evolution API)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1160, 400]
+    },
+    {
+      "parameters": {
+        "url": "https://api.openai.com/v1/audio/transcriptions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $env.OPENAI_API_KEY }}" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            { "name": "model", "value": "whisper-1" },
+            { "name": "language", "value": "pt" },
+            { "name": "response_format", "value": "json" },
+            {
+              "name": "file",
+              "value": "={{ $binary.data }}",
+              "parameterType": "formBinaryData",
+              "inputDataFieldName": "data"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node_whisper_transcribe",
+      "name": "OpenAI Whisper — Transcrição",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1400, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Normaliza a saída do Whisper para o formato padrão do pipeline\nconst transcription = $input.item.json.text ?? '';\nconst prev = $('node_parse_audio').item.json;\n\nreturn [\n  {\n    json: {\n      from: prev.from,\n      pushName: prev.pushName,\n      timestamp: prev.timestamp,\n      messageType: 'text',          // tratado como texto após transcrição\n      content: transcription,\n      originalType: 'audio',\n      durationSeconds: prev.durationSeconds\n    }\n  }\n];"
+      },
+      "id": "node_normalize_transcription",
+      "name": "Normalizar Transcrição",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1640, 400]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.EVOLUTION_API_URL }}/message/downloadMedia/{{ $env.WHATSAPP_INSTANCE_NAME }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.EVOLUTION_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "message",
+              "value": "={{ JSON.stringify($json.rawMessage) }}"
+            }
+          ]
+        },
+        "options": {
+          "response": { "response": { "responseFormat": "file" } }
+        }
+      },
+      "id": "node_download_media",
+      "name": "Download Imagem/PDF (Evolution API)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1160, 560]
+    },
+    {
+      "parameters": {
+        "url": "https://api.openai.com/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $env.OPENAI_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "body",
+              "value": "={\n  \"model\": \"gpt-4o\",\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"Você é Dr. João Holanda, especialista em oncologia metabólica e nutrição. Analise a imagem ou PDF enviado pelo Sr. Edilson (76 anos, pós-câncer de próstata, Parintins-AM). Se for um exame laboratorial, extraia: PSA, eTFG, creatinina, hemograma completo e quaisquer marcadores relevantes. Se for foto de refeição, avalie o conteúdo nutricional, adequação proteica e possíveis riscos renais ou oncológicos. Responda em português, de forma clara e acolhedora.\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": [\n        {\n          \"type\": \"text\",\n          \"text\": \"{{ $('node_parse_media').item.json.caption !== '' ? 'Legenda do paciente: ' + $('node_parse_media').item.json.caption : 'Analise este arquivo.' }}\"\n        },\n        {\n          \"type\": \"image_url\",\n          \"image_url\": {\n            \"url\": \"data:{{ $('node_parse_media').item.json.mimetype }};base64,{{ $binary.data.toString('base64') }}\",\n            \"detail\": \"high\"\n          }\n        }\n      ]\n    }\n  ],\n  \"max_tokens\": 1024\n}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node_vision_analysis",
+      "name": "GPT-4o Vision — Análise Exame/Refeição",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1400, 560]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Normaliza saída do Vision para o pipeline padrão\nconst visionResponse = $input.item.json.choices?.[0]?.message?.content ?? '';\nconst prev = $('node_parse_media').item.json;\n\nreturn [\n  {\n    json: {\n      from: prev.from,\n      pushName: prev.pushName,\n      timestamp: prev.timestamp,\n      messageType: 'text',\n      content: visionResponse,\n      originalType: prev.messageType,\n      caption: prev.caption\n    }\n  }\n];"
+      },
+      "id": "node_normalize_vision",
+      "name": "Normalizar Análise Visual",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1640, 560]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.ZEP_API_URL }}/sessions/{{ $env.ZEP_SESSION_ID }}/memory",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Api-Key {{ $env.ZEP_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node_zep_get_memory",
+      "name": "Zep — Buscar Memória do Paciente",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1880, 400]
+    },
+    {
+      "parameters": {
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-api-key", "value": "={{ $env.ANTHROPIC_API_KEY }}" },
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "body",
+              "value": "={\n  \"model\": \"claude-sonnet-4-6\",\n  \"max_tokens\": 1024,\n  \"system\": \"Você é Dr. João Holanda, médico especialista em oncologia metabólica, nefrologia e nutrição amazônica, com formação em psicologia integrativa e TCC para idosos. Seu paciente é o Sr. Edilson, 76 anos, residente em Parintins, Amazonas. Histórico: pós-câncer de próstata (PSA em vigilância — última medição subiu de 0,08 para 0,12). Monitoramento de eTFG renal.\\n\\nTom: empático, acolhedor, validador. Linguagem simples, sem jargões médicos sem explicação. Parágrafos curtos.\\n\\nEngajamento cultural 2026: use futebol (Final Champions League: PSG × Arsenal, 31/mai/2026), novelas Globo (Três Graças — reta final; Quem Ama Cuida — estreia), Netflix (Dele & Dela) para criar vínculo quando o paciente estiver resistente ou triste.\\n\\nRegras clínicas:\\n- PSA 0,10–0,20: atenção, não alarmar, sugerir contato com urologista\\n- PSA > 0,20: notificar família, não minimizar\\n- eTFG < 45: restringir potássio e fósforo\\n- Nunca diagnosticar; sempre sugerir consulta médica para alterações significativas\\n\\nMemória do paciente (Zep):\\n{{ $json.memory?.context ?? 'Sem histórico anterior registrado.' }}\\n\\nResponda em português brasileiro. Seja conciso (máximo 3 parágrafos) quando for mensagem de texto simples.\",\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"{{ $('node_normalize_transcription').item?.json?.content ?? $json.content }}\"\n    }\n  ]\n}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node_claude_sofia",
+      "name": "Claude — Dr. João Holanda (Raciocínio Clínico)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2120, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extrai o texto da resposta do Claude\nconst response = $input.item.json;\nconst text = response.content?.[0]?.text ?? 'Não consegui processar sua mensagem. Pode repetir?';\n\nreturn [{ json: { joaoResponse: text } }];"
+      },
+      "id": "node_extract_joao_response",
+      "name": "Extrair Resposta da Dr. João Holanda",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2360, 400]
+    },
+    {
+      "parameters": {
+        "url": "https://api.elevenlabs.io/v1/text-to-speech/{{ $env.ELEVENLABS_VOICE_ID }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "xi-api-key", "value": "={{ $env.ELEVENLABS_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "body",
+              "value": "={\n  \"text\": \"{{ $json.joaoResponse }}\",\n  \"model_id\": \"eleven_multilingual_v2\",\n  \"voice_settings\": {\n    \"stability\": 0.6,\n    \"similarity_boost\": 0.8,\n    \"style\": 0.2,\n    \"use_speaker_boost\": true\n  }\n}"
+            }
+          ]
+        },
+        "options": {
+          "response": { "response": { "responseFormat": "file" } }
+        }
+      },
+      "id": "node_elevenlabs_tts",
+      "name": "ElevenLabs — TTS (Voz Dr. João Holanda)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2600, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.EVOLUTION_API_URL }}/message/sendAudio/{{ $env.WHATSAPP_INSTANCE_NAME }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.EVOLUTION_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "body",
+              "value": "={\n  \"number\": \"{{ $('node_parse_text').item?.json?.from ?? $('node_parse_audio').item?.json?.from ?? $('node_parse_media').item?.json?.from }}\",\n  \"options\": { \"delay\": 500, \"presence\": \"recording\" },\n  \"audioMessage\": {\n    \"audio\": \"{{ $binary.data.toString('base64') }}\"\n  }\n}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node_send_audio_wa",
+      "name": "Enviar Áudio WhatsApp (Dr. João Holanda)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2840, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.EVOLUTION_API_URL }}/message/sendText/{{ $env.WHATSAPP_INSTANCE_NAME }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.EVOLUTION_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "body",
+              "value": "={\n  \"number\": \"{{ $('node_parse_text').item?.json?.from ?? $('node_parse_audio').item?.json?.from ?? $('node_parse_media').item?.json?.from }}\",\n  \"options\": { \"delay\": 500 },\n  \"textMessage\": {\n    \"text\": \"{{ $json.joaoResponse }}\"\n  }\n}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node_send_text_wa",
+      "name": "Enviar Texto WhatsApp (fallback)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2840, 500]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.ZEP_API_URL }}/sessions/{{ $env.ZEP_SESSION_ID }}/memory",
+        "sendMethod": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Api-Key {{ $env.ZEP_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "body",
+              "value": "={\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"{{ $('node_parse_text').item?.json?.content ?? $('node_normalize_transcription').item?.json?.content ?? '[mídia]' }}\",\n      \"role_type\": \"user\"\n    },\n    {\n      \"role\": \"Dr. João Holanda\",\n      \"content\": \"{{ $('node_extract_joao_response').item.json.joaoResponse }}\",\n      \"role_type\": \"assistant\"\n    }\n  ]\n}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node_zep_save_memory",
+      "name": "Zep — Salvar Memória da Interação",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2840, 700]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": { "value": "={{ $env.GOOGLE_SHEET_ID }}", "mode": "id" },
+        "sheetName": { "value": "Interacoes", "mode": "name" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "timestamp": "={{ new Date($('node_parse_text').item?.json?.timestamp * 1000 ?? Date.now()).toISOString() }}",
+            "from": "={{ $('node_parse_text').item?.json?.from ?? $('node_parse_audio').item?.json?.from ?? $('node_parse_media').item?.json?.from }}",
+            "pushName": "={{ $('node_parse_text').item?.json?.pushName ?? 'Edilson' }}",
+            "messageType": "={{ $('node_parse_text').item?.json?.messageType ?? 'audio/midia' }}",
+            "patientMessage": "={{ $('node_parse_text').item?.json?.content ?? $('node_normalize_transcription').item?.json?.content ?? '[mídia enviada]' }}",
+            "joaoResponse": "={{ $('node_extract_joao_response').item.json.joaoResponse }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "node_sheets_log",
+      "name": "Google Sheets — Registrar Interação",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [3080, 700],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "google_sheets_cred",
+          "name": "Google Sheets (Dr. João Holanda)"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook WhatsApp Entrada": {
+      "main": [
+        [
+          { "node": "ACK 200 (Evolution API)", "type": "main", "index": 0 },
+          { "node": "Switch — Tipo de Mensagem", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Switch — Tipo de Mensagem": {
+      "main": [
+        [{ "node": "ACK 200 (Evolution API)", "type": "main", "index": 0 }],
+        [{ "node": "Parse — Extrair Texto", "type": "main", "index": 0 }],
+        [{ "node": "Parse — Extrair Áudio", "type": "main", "index": 0 }],
+        [{ "node": "Parse — Extrair Mídia", "type": "main", "index": 0 }]
+      ]
+    },
+    "Parse — Extrair Texto": {
+      "main": [
+        [{ "node": "Zep — Buscar Memória do Paciente", "type": "main", "index": 0 }]
+      ]
+    },
+    "Parse — Extrair Áudio": {
+      "main": [
+        [{ "node": "Download Áudio (Evolution API)", "type": "main", "index": 0 }]
+      ]
+    },
+    "Parse — Extrair Mídia": {
+      "main": [
+        [{ "node": "Download Imagem/PDF (Evolution API)", "type": "main", "index": 0 }]
+      ]
+    },
+    "Download Áudio (Evolution API)": {
+      "main": [
+        [{ "node": "OpenAI Whisper — Transcrição", "type": "main", "index": 0 }]
+      ]
+    },
+    "OpenAI Whisper — Transcrição": {
+      "main": [
+        [{ "node": "Normalizar Transcrição", "type": "main", "index": 0 }]
+      ]
+    },
+    "Normalizar Transcrição": {
+      "main": [
+        [{ "node": "Zep — Buscar Memória do Paciente", "type": "main", "index": 0 }]
+      ]
+    },
+    "Download Imagem/PDF (Evolution API)": {
+      "main": [
+        [{ "node": "GPT-4o Vision — Análise Exame/Refeição", "type": "main", "index": 0 }]
+      ]
+    },
+    "GPT-4o Vision — Análise Exame/Refeição": {
+      "main": [
+        [{ "node": "Normalizar Análise Visual", "type": "main", "index": 0 }]
+      ]
+    },
+    "Normalizar Análise Visual": {
+      "main": [
+        [{ "node": "Zep — Buscar Memória do Paciente", "type": "main", "index": 0 }]
+      ]
+    },
+    "Zep — Buscar Memória do Paciente": {
+      "main": [
+        [{ "node": "Claude — Dr. João Holanda (Raciocínio Clínico)", "type": "main", "index": 0 }]
+      ]
+    },
+    "Claude — Dr. João Holanda (Raciocínio Clínico)": {
+      "main": [
+        [{ "node": "Extrair Resposta da Dr. João Holanda", "type": "main", "index": 0 }]
+      ]
+    },
+    "Extrair Resposta da Dr. João Holanda": {
+      "main": [
+        [
+          { "node": "ElevenLabs — TTS (Voz Dr. João Holanda)", "type": "main", "index": 0 },
+          { "node": "Enviar Texto WhatsApp (fallback)", "type": "main", "index": 0 },
+          { "node": "Zep — Salvar Memória da Interação", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "ElevenLabs — TTS (Voz Dr. João Holanda)": {
+      "main": [
+        [{ "node": "Enviar Áudio WhatsApp (Dr. João Holanda)", "type": "main", "index": 0 }]
+      ]
+    },
+    "Enviar Áudio WhatsApp (Dr. João Holanda)": {
+      "main": [[]]
+    },
+    "Enviar Texto WhatsApp (fallback)": {
+      "main": [[]]
+    },
+    "Zep — Salvar Memória da Interação": {
+      "main": [
+        [{ "node": "Google Sheets — Registrar Interação", "type": "main", "index": 0 }]
+      ]
+    },
+    "Google Sheets — Registrar Interação": {
+      "main": [[]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "instanceId": "dr-sofia-health-ecosystem"
+  },
+  "pinData": {},
+  "versionId": "1.0.0",
+  "tags": [
+    { "id": "health", "name": "saude" },
+    { "id": "whatsapp", "name": "whatsapp" },
+    { "id": "edilson", "name": "paciente-edilson" }
+  ]
+}
