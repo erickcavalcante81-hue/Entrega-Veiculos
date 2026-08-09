@@ -31,6 +31,8 @@ add_env "NVIDIA_NIM_API_KEY"     ""
 add_env "NIM_CHAT_MODEL"         "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning"
 add_env "NIM_REASONING_BUDGET"   "4096"
 add_env "AGENT_HOST_PORT"        "3001"
+add_env "VOZ_ALERTA_LIMIAR"      "3"
+add_env "EXTRA_ALLOWED_NUMBERS"  ""
 add_env "EDILSON_PHONE"          ""
 add_env "N8N_FAMILY_GROUP_WA_ID" ""
 
@@ -75,6 +77,8 @@ fetch "agents/joao_holanda_service.py"    agents/joao_holanda_service.py
 fetch "agents/Dockerfile"                 agents/Dockerfile
 fetch "agents/requirements.txt"           agents/requirements.txt
 fetch "agents/dr_joao_holanda_prompt.md"  agents/dr_joao_holanda_prompt.md
+fetch "agents/setup_voice.py"             agents/setup_voice.py
+mkdir -p voz   # amostras de voz do paciente (não versionadas)
 
 # Verifica que todos os arquivos necessários ao build chegaram
 MISSING=""

@@ -1,0 +1,6 @@
+
+# Amostras de voz do paciente — dado biométrico, nunca versionar
+voz/
+*.ogg
+*.wav
+qrcode.png

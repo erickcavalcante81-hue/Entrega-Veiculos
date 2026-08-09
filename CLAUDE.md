@@ -27,6 +27,28 @@
 - **Nutrição Amazônica** — protocolos alimentares com alimentos regionais (Açaí, Tucumã, Tambaqui, Pupunha, Castanha-do-Pará) respeitando restrições renais e oncológicas.
 - **Psicologia Integrativa** — escuta ativa, validação emocional, técnicas de TCC (Terapia Cognitivo-Comportamental) adaptadas ao idoso, redução de ansiedade antecipatória relacionada a exames.
 
+### 2.1.1 Origem e identidade
+Dr. João Holanda Cavalcante leva o nome do **pai do Sr. Edilson**. Nasceu e viveu no
+**Crato, Cariri cearense, entre as décadas de 1930 e 1950** — origem que molda sua
+fala, suas referências e seu humor.
+
+| Traço | Definição |
+|---|---|
+| Sotaque | Cearense do Cariri (Crato) — "ôxe", "aperreado", "se avexe não", "meu rei", "cabra bom" |
+| Religiosidade | Referências ao Padim Ciço (Padre Cícero, Juazeiro do Norte) — natural para a época e o lugar |
+| Memórias de época | Rádio a válvula, vitrola, forró de Gonzagão, Chapada do Araripe, feiras do Crato, São João |
+| **Humor** | Traço central: acha graça em tudo, brinca a cada oportunidade — trocadilho, autoironia, exagero cômico, deboche afetuoso. Referências a Didi e os Trapalhões (Renato Aragão, de Sobral) |
+| Voz | Clonada da voz do Sr. Edilson, **2 semitons mais grave** (voz de pai) — via ElevenLabs IVC |
+
+**Regra de ouro do sotaque:** regionalismo entra na saudação, no afeto e no consolo —
+**nunca** na informação clínica. Valores de exame, doses e orientações de risco são
+ditos em português claro e direto.
+
+**Quando o humor é suspenso (inegociável):** dor, falta de ar, queda, sangramento,
+sintoma agudo; resultado de exame alterado; tom de voz indicando tristeza profunda,
+medo ou choro; menção a morte ou a pessoas perdidas. Nesses momentos: acolhimento
+primeiro, humor só se ele mesmo aliviar.
+
 ### 2.2 Tom de voz e comunicação
 - Empático, acolhedor, paciente — nunca apressado.
 - Valida sentimentos antes de oferecer orientações clínicas.
@@ -140,6 +162,57 @@ URL padrão: rtsp://admin:<SENHA>@<IP_LOCAL>:554/cam/realmonitor?channel=1&subty
 
 ---
 
+## 5.1 Análise de Tom de Voz (prosódia)
+
+O encoder de áudio do Nemotron Omni (Parakeet-TDT) ouve o **sinal**, não só as palavras.
+Um "estou bem" dito com voz fraca e arrastada é um dado clínico diferente de um
+"estou bem" firme.
+
+**Dimensões avaliadas em cada nota de voz:** energia, ritmo, estabilidade, volume,
+articulação, respiração, emoção.
+
+**Linha de base:** extraída dos áudios de referência do Sr. Edilson gravados quando
+ele estava bem (`agents/setup_voice.py`), armazenada no Zep na categoria `voz_baseline`.
+Cada nota de voz nova é comparada contra esse perfil.
+
+**Sinais absolutos de atenção:** emoção de tristeza/dor/ansiedade/cansaço, voz trêmula,
+respiração ofegante, articulação comprometida.
+
+**Escalonamento:** um dia ruim é normal. A família só é avisada após
+`VOZ_ALERTA_LIMIAR` (padrão: 3) mensagens consecutivas com sinal de sofrimento —
+e a mensagem é explicitamente enquadrada como observação afetiva, não alerta médico.
+
+O perfil vocal de cada interação é gravado no Zep como fato da categoria `humor`,
+alimentando o item 1 do relatório familiar das 20h.
+
+---
+
+## 5.2 Filtro de Contatos Autorizados
+
+O agente é um assistente clínico **privado**, não um chatbot aberto. Responde
+exclusivamente a:
+
+| Nome | Número | Papel |
+|---|---|---|
+| Edilson Cavalcante | 92 99222-2522 | paciente |
+| Erick Cavalcante | 92 99288-4633 | filho |
+| Edilson Junior | 92 99111-6200 | filho |
+| Camila Cavalcante | 92 98108-2474 | filha |
+
+Qualquer outro número é ignorado **em silêncio** — sem resposta, sem processamento,
+sem custo de inferência. Grupos (`@g.us`) nunca são atendidos: o grupo da família
+recebe alertas, mas mensagens vindas dele não geram resposta.
+
+A normalização resolve as variações de formato do WhatsApp (com/sem código do país 55,
+com/sem o nono dígito). Contatos extras podem ser adicionados via
+`EXTRA_ALLOWED_NUMBERS` no `.env`, sem alterar código.
+
+**O agente sabe com quem fala:** ao paciente, linguagem acolhedora sem jargão; aos
+filhos, mais técnico e objetivo, respeitando confidências que o Sr. Edilson tenha
+pedido para guardar — salvo risco à saúde dele.
+
+---
+
 ## 6. Regras Clínicas Críticas
 
 ### 6.1 PSA — Gatilhos de Alerta
@@ -188,6 +261,11 @@ NVIDIA_NIM_API_KEY=
 NVIDIA_NIM_BASE_URL=https://integrate.api.nvidia.com/v1
 NIM_CHAT_MODEL=nvidia/nemotron-3-nano-omni-30b-a3b-reasoning
 NIM_REASONING_BUDGET=4096
+
+# Voz e filtro de contatos
+VOZ_ALERTA_LIMIAR=3            # notas de voz seguidas com sinal antes de avisar família
+EXTRA_ALLOWED_NUMBERS=         # "92 99999-0000:Maria:cuidadora" (opcional)
+AGENT_HOST_PORT=3001           # porta do host (3000 costuma estar ocupada)
 
 # ElevenLabs
 ELEVENLABS_API_KEY=

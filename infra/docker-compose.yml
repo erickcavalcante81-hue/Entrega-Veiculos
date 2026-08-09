@@ -172,9 +172,15 @@ services:
       - NVIDIA_NIM_BASE_URL=https://integrate.api.nvidia.com/v1
       - NIM_CHAT_MODEL=${NIM_CHAT_MODEL:-nvidia/nemotron-3-nano-omni-30b-a3b-reasoning}
       - NIM_REASONING_BUDGET=${NIM_REASONING_BUDGET:-4096}
+      - VOZ_ALERTA_LIMIAR=${VOZ_ALERTA_LIMIAR:-3}
+      - EXTRA_ALLOWED_NUMBERS=${EXTRA_ALLOWED_NUMBERS:-}
       - VPS_IP=${VPS_IP}
       - EDILSON_PHONE=${EDILSON_PHONE}
       - N8N_FAMILY_GROUP_WA_ID=${N8N_FAMILY_GROUP_WA_ID}
+    volumes:
+      # Amostras de voz do Sr. Edilson — dado biométrico do paciente.
+      # Montadas como volume, fora da imagem e fora do repositório git.
+      - ./voz:/app/voz:ro
     depends_on:
       - zep
       - postgres

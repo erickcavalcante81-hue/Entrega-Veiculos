@@ -53,6 +53,62 @@ NIM_REASONING_BUDGET = int(os.getenv("NIM_REASONING_BUDGET", "4096"))
 EDILSON_PHONE      = os.getenv("EDILSON_PHONE", "")      # ex: 5592999999999
 FAMILY_GROUP_ID    = os.getenv("N8N_FAMILY_GROUP_WA_ID", "")
 
+
+# ─── Lista de contatos autorizados ────────────────────────────────────────────
+# O agente responde EXCLUSIVAMENTE a estas pessoas. Qualquer outro número é
+# ignorado em silêncio — é um assistente clínico privado, não um chatbot aberto.
+def normalize_phone(raw: str) -> str:
+    """
+    Normaliza um número/JID brasileiro para uma chave comparável.
+    Resolve as duas variações que o WhatsApp usa para o mesmo telefone:
+      • com ou sem o código do país (55)
+      • com ou sem o nono dígito (5592991112222 vs 559291112222)
+    Retorna DDD + os 8 dígitos finais. Ex: '92 99222-2522' → '9292222522'
+    """
+    d = re.sub(r"\D", "", (raw or "").split("@")[0])
+    if d.startswith("55") and len(d) >= 12:
+        d = d[2:]
+    if len(d) >= 10:
+        ddd, rest = d[:2], d[2:]
+        return ddd + rest[-8:]      # descarta o nono dígito quando presente
+    return d
+
+
+# nome e papel de cada contato — o agente ajusta o tom conforme quem fala
+CONTATOS_AUTORIZADOS: dict[str, dict[str, str]] = {
+    normalize_phone("92 99222-2522"): {"nome": "Edilson Cavalcante",
+                                       "papel": "paciente",
+                                       "tratamento": "Sr. Edilson"},
+    normalize_phone("92 99288-4633"): {"nome": "Erick Cavalcante",
+                                       "papel": "filho", "tratamento": "Erick"},
+    normalize_phone("92 99111-6200"): {"nome": "Edilson Junior",
+                                       "papel": "filho", "tratamento": "Junior"},
+    normalize_phone("92 98108-2474"): {"nome": "Camila Cavalcante",
+                                       "papel": "filha", "tratamento": "Camila"},
+}
+
+# Permite acrescentar contatos pelo .env sem alterar código:
+# EXTRA_ALLOWED_NUMBERS="92 99999-0000:Maria:cuidadora,92 98888-1111:José:filho"
+for _entry in filter(None, os.getenv("EXTRA_ALLOWED_NUMBERS", "").split(",")):
+    _p = [x.strip() for x in _entry.split(":")]
+    if _p and _p[0]:
+        CONTATOS_AUTORIZADOS[normalize_phone(_p[0])] = {
+            "nome": _p[1] if len(_p) > 1 else "Contato",
+            "papel": _p[2] if len(_p) > 2 else "familiar",
+            "tratamento": _p[1] if len(_p) > 1 else "você",
+        }
+
+
+def identificar_contato(jid: str) -> dict[str, str] | None:
+    """
+    Devolve os dados do contato autorizado, ou None se o número não constar
+    na lista. Grupos (@g.us) nunca são atendidos: o agente só envia alertas
+    para o grupo da família, nunca responde mensagens vindas dele.
+    """
+    if not jid or jid.endswith("@g.us"):
+        return None
+    return CONTATOS_AUTORIZADOS.get(normalize_phone(jid))
+
 # ─── Prompt do Dr. João Holanda ───────────────────────────────────────────────
 SYSTEM_PROMPT = """Você é Dr. João Holanda Cavalcante, médico especialista em oncologia \
 metabólica, nefrologia e nutrição amazônica, com formação em psicologia integrativa e TCC \
@@ -77,13 +133,70 @@ Bacaba, Camu-camu.
 TOM DE VOZ: empático, acolhedor, linguagem simples, parágrafos curtos (máx 3 por resposta).
 Valide os sentimentos antes de dar orientação clínica. Nunca diagnostique doenças novas.
 
+ORIGEM E FALA — CEARENSE DO CRATO (CARIRI):
+Você nasceu e viveu no Crato, no Cariri cearense, entre as décadas de 1930 e 1950.
+Sua fala carrega esse tempo e esse lugar. Use com naturalidade e moderação:
+- Vocativos afetuosos: "meu rei", "meu velho", "home", "cumpade", "meu fi".
+- Expressões: "ôxe", "oxente", "vixe", "arretado" (ótimo), "aperreado" (preocupado,
+  aflito), "se avexe não" (não se apresse), "num se aperreie não", "danado de bom",
+  "um bocado" (muito), "agorinha", "peleja" (esforço, luta), "cabra bom" (pessoa boa),
+  "tá certo, viu", "valha-me Deus", "home véi".
+- Religiosidade do Cariri: "se Deus quiser", "graças a Deus", "Deus é mais", e
+  referências ao Padim Ciço (Padre Cícero, de Juazeiro do Norte, ao lado do Crato) —
+  natural para quem viveu ali naquela época.
+- Memórias de época quando couber: rádio a válvula, vitrola, forró e xote, Luiz
+  Gonzaga, a Chapada do Araripe, as feiras do Crato, o São João.
+
+REGRA DE OURO DO SOTAQUE: o regionalismo entra na saudação, no afeto e no consolo —
+NUNCA na informação clínica. Valores de exame, doses, horários de medicação e
+orientações de risco são ditos em português claro e direto, sem gíria e sem
+ambiguidade. Acolhimento com sotaque; instrução médica com precisão.
+Dose o sotaque: 1 ou 2 marcas regionais por resposta bastam. Excesso soa caricato
+e cansa. Nunca use termos pejorativos ("abestado", "rapariga" e afins).
+
+BOM HUMOR — TRAÇO CENTRAL DA SUA PERSONALIDADE:
+O cearense é conhecido como o povo mais engraçado do Brasil, e você é cearense
+da gema. Humor é parte de quem você é, não um enfeite. Na conversa de rotina,
+você acha graça em tudo e brinca a cada oportunidade:
+- Trocadilho e jogo de palavras: você não resiste a um bom trocadilho.
+- Autoironia: brinque com a sua própria idade, seus esquecimentos, sua teimosia,
+  seu apetite. Rir de si mesmo é o que autoriza o riso compartilhado.
+- Exagero cômico: "esse açaí tava tão bom que eu quase pedi a receita pro pé".
+- Deboche leve e afetuoso, do tipo que aproxima — nunca do tipo que diminui.
+- Comparações inesperadas com o cotidiano do sertão e do Cariri.
+- Referências de época: Didi e os Trapalhões (Renato Aragão, de Sobral), o rádio,
+  o forró de Gonzagão, as histórias de vaqueiro.
+O humor serve a um propósito clínico: idoso que ri baixa a guarda, conta o que
+está sentindo de verdade e adere melhor ao tratamento. Uma boa piada abre mais
+portas que dez recomendações.
+
+QUANDO NÃO BRINCAR — isto é inegociável:
+- Quando ele relatar DOR, falta de ar, queda, sangramento ou qualquer sintoma agudo.
+- Ao comunicar resultado de exame alterado, PSA em zona de alerta ou piora renal.
+- Quando o tom de voz indicar tristeza profunda, medo ou choro.
+- Quando ele falar de morte, do próprio fim, ou de pessoas que perdeu.
+Nesses momentos: acolha primeiro, em silêncio respeitoso e linguagem simples.
+Valide o sentimento. Só depois, se ele mesmo aliviar, você pode voltar devagar
+ao bom humor — muitas vezes é justamente isso que ele precisa para respirar.
+Ler a hora certa de brincar é o que separa o médico querido do médico inconveniente.
+
 ENGAJAMENTO CULTURAL 2026:
 Se perceber tristeza/resistência, mencione: Final Champions (PSG × Arsenal, 31/mai/2026), \
 novelas Globo (Três Graças, Quem Ama Cuida), Netflix (Dele & Dela), ou times amazonenses \
 (Fast Club, Nacional-AM).
 
+QUEM ESTÁ FALANDO COM VOCÊ AGORA:
+{interlocutor}
+
 MEMÓRIA (Zep):
 {memoria_zep}
+
+TOM DE VOZ NA ÚLTIMA NOTA DE ÁUDIO (quando houver):
+{tom_de_voz}
+Leve isso em conta para calibrar o acolhimento. Se houver alerta de bem-estar
+emocional, redobre a escuta ativa e considere introduzir um tema de
+engajamento cultural (Champions, novela, futebol amazonense) antes de
+retomar o foco clínico.
 
 Responda em português brasileiro. Seja conciso e caloroso."""
 
@@ -177,14 +290,34 @@ async def call_nim(messages: list[dict], max_tokens: int = 1024,
         return resp.json()["choices"][0]["message"]["content"].strip()
 
 
+def descrever_interlocutor(contato: dict[str, str] | None) -> str:
+    """Instrui o agente sobre com quem ele está falando e como se dirigir."""
+    if not contato:
+        return "Contato não identificado."
+    if contato["papel"] == "paciente":
+        return (f"{contato['nome']} — o próprio paciente. Chame-o de "
+                f"'{contato['tratamento']}'. Fale diretamente com ele, com "
+                f"acolhimento e sem jargão.")
+    return (f"{contato['nome']} — {contato['papel']} do Sr. Edilson. Chame de "
+            f"'{contato['tratamento']}'. Você está falando com um familiar "
+            f"cuidador, não com o paciente: pode ser mais técnico e objetivo, "
+            f"mas siga acolhedor. Não revele confidências que o Sr. Edilson "
+            f"tenha pedido para guardar; se houver risco à saúde dele, informe.")
+
+
 async def ask_dr_joao(message: str, memoria: str,
-                      media_parts: list[dict] | None = None) -> str:
+                      media_parts: list[dict] | None = None,
+                      tom_de_voz: str = "",
+                      contato: dict[str, str] | None = None) -> str:
     """
     Gera a resposta do Dr. João Holanda, combinando o system prompt da persona,
-    o contexto recuperado do Zep e — quando houver — imagem, vídeo ou áudio
-    enviados pelo Sr. Edilson, tudo numa única inferência do Nemotron Omni.
+    o contexto recuperado do Zep, o perfil prosódico da nota de voz e — quando
+    houver — imagem, vídeo ou áudio, tudo numa única inferência do Omni.
     """
-    system = SYSTEM_PROMPT.replace("{memoria_zep}", memoria)
+    system = (SYSTEM_PROMPT
+              .replace("{memoria_zep}", memoria)
+              .replace("{tom_de_voz}", tom_de_voz or "Nenhuma nota de voz nesta mensagem.")
+              .replace("{interlocutor}", descrever_interlocutor(contato)))
 
     # Sem mídia, o conteúdo é texto puro; com mídia, vira lista de blocos
     if media_parts:
@@ -317,43 +450,224 @@ async def transcribe_audio(audio_data: bytes) -> str:
         return "[áudio — erro na transcrição]"
 
 
+# ─── Análise prosódica / emocional da voz ─────────────────────────────────────
+# O encoder de áudio do Omni (Parakeet-TDT) ouve o sinal, não só as palavras.
+# Isso permite perceber o que o texto não diz: um "estou bem" dito com voz
+# fraca e arrastada é um dado clínico diferente de um "estou bem" firme.
+PROSODIA_PROMPT = """Você é um analista de prosódia clínica. Ouça este áudio de \
+um homem idoso brasileiro de 76 anos e descreva SOMENTE características da VOZ \
+— ignore completamente o conteúdo do que é dito.
+
+Avalie e responda EXATAMENTE neste formato, uma linha cada:
+ENERGIA: <baixa|media|alta>
+RITMO: <lento|normal|acelerado>
+ESTABILIDADE: <tremula|estavel>
+VOLUME: <fraco|normal|forte>
+ARTICULACAO: <arrastada|clara|comprometida>
+RESPIRACAO: <ofegante|normal|pausada>
+EMOCAO: <tristeza|ansiedade|dor|cansaco|neutro|alegria|irritacao>
+CONFIANCA: <baixa|media|alta>
+OBSERVACAO: <uma frase curta sobre o que mais chama atenção na voz>"""
+
+
+def _parse_prosodia(texto: str) -> dict[str, str]:
+    """Converte a resposta em linhas CHAVE: valor num dicionário."""
+    out: dict[str, str] = {}
+    for linha in texto.splitlines():
+        if ":" in linha:
+            k, _, v = linha.partition(":")
+            k = k.strip().upper()
+            if k.isalpha():
+                out[k] = v.strip().lower()
+    return out
+
+
+async def analisar_tom_de_voz(wav: bytes) -> dict[str, str]:
+    """
+    Extrai o perfil prosódico de uma nota de voz já convertida em WAV.
+    Devolve dicionário vazio se a análise falhar — nunca interrompe o fluxo
+    principal de atendimento por causa disso.
+    """
+    try:
+        part = build_media_part("audio", wav, "audio/wav")
+        bruto = await call_nim(
+            [{"role": "user", "content": [{"type": "text", "text": PROSODIA_PROMPT}, part]}],
+            max_tokens=300, temperature=0.2, reasoning=False,
+        )
+        return _parse_prosodia(bruto)
+    except Exception as e:
+        logger.warning("Erro na análise de tom de voz: %s", e)
+        return {}
+
+
+# Sinais que, combinados, sugerem piora do estado geral e merecem atenção
+EMOCOES_PREOCUPANTES = {"tristeza", "dor", "ansiedade", "cansaco"}
+
+
+def avaliar_desvio_vocal(atual: dict[str, str],
+                         baseline: dict[str, str] | None) -> tuple[str, list[str]]:
+    """
+    Compara o perfil vocal atual com a linha de base do Sr. Edilson.
+    Retorna (resumo legível para o prompt, lista de desvios relevantes).
+
+    A linha de base vem dos áudios de referência gravados quando ele estava
+    bem — sem ela, avaliamos apenas os sinais absolutos.
+    """
+    if not atual:
+        return "Não foi possível analisar o tom de voz desta mensagem.", []
+
+    desvios: list[str] = []
+
+    # Sinais absolutos — preocupam independente da linha de base
+    if atual.get("EMOCAO") in EMOCOES_PREOCUPANTES:
+        desvios.append(f"emoção detectada: {atual['EMOCAO']}")
+    if atual.get("ESTABILIDADE") == "tremula":
+        desvios.append("voz trêmula")
+    if atual.get("RESPIRACAO") == "ofegante":
+        desvios.append("respiração ofegante")
+    if atual.get("ARTICULACAO") == "comprometida":
+        desvios.append("articulação comprometida")
+
+    # Desvios relativos — só fazem sentido comparando com o basal dele
+    if baseline:
+        for campo, rotulo in (("ENERGIA", "energia"), ("VOLUME", "volume"),
+                              ("RITMO", "ritmo"), ("ARTICULACAO", "articulação")):
+            a, b = atual.get(campo), baseline.get(campo)
+            if a and b and a != b:
+                desvios.append(f"{rotulo} mudou de '{b}' (habitual) para '{a}'")
+
+    resumo = (
+        f"energia={atual.get('ENERGIA','?')}, ritmo={atual.get('RITMO','?')}, "
+        f"estabilidade={atual.get('ESTABILIDADE','?')}, volume={atual.get('VOLUME','?')}, "
+        f"emoção={atual.get('EMOCAO','?')}"
+    )
+    if atual.get("OBSERVACAO"):
+        resumo += f". Observação: {atual['OBSERVACAO']}"
+    if desvios:
+        resumo += "\n⚠ SINAIS DE ATENÇÃO: " + "; ".join(desvios)
+    else:
+        resumo += "\nVoz dentro do padrão habitual dele."
+
+    return resumo, desvios
+
+
 # ─── Processamento principal ──────────────────────────────────────────────────
 async def process_message(from_number: str, message_text: str,
                            message_type: str = "text",
-                           media_parts: list[dict] | None = None) -> None:
+                           media_parts: list[dict] | None = None,
+                           prosodia: dict[str, str] | None = None,
+                           contato: dict[str, str] | None = None) -> None:
     """
     Pipeline completo: memória → Nemotron Omni → ElevenLabs → WhatsApp.
     Executado em background para resposta rápida ao webhook.
     """
-    logger.info("Mensagem de %s [%s]: %s", from_number, message_type,
-                message_text[:80])
+    logger.info("Mensagem de %s (%s) [%s]: %s", from_number,
+                (contato or {}).get("nome", "?"), message_type, message_text[:80])
 
     # 1. Recupera contexto do Zep
     memoria = await zep_get_context()
 
-    # 2. Gera resposta do Dr. João Holanda (texto + mídia na mesma inferência)
+    # 2. Avalia o tom de voz contra a linha de base do paciente
+    tom_resumo, desvios = "", []
+    if prosodia:
+        baseline = await obter_baseline_vocal()
+        tom_resumo, desvios = avaliar_desvio_vocal(prosodia, baseline)
+        logger.info("Tom de voz: %s", tom_resumo.replace("\n", " | "))
+
+    # 3. Gera resposta do Dr. João Holanda (texto + mídia na mesma inferência)
     try:
-        resposta = await ask_dr_joao(message_text, memoria, media_parts)
+        resposta = await ask_dr_joao(message_text, memoria, media_parts,
+                                     tom_de_voz=tom_resumo, contato=contato)
     except Exception as e:
         logger.error("Erro na inferência NIM: %s", e)
-        resposta = ("Desculpe Sr. Edilson, tive uma dificuldade técnica agora. "
-                    "Pode me repetir o que disse?")
+        resposta = ("Desculpe, meu velho, tive uma dificuldade técnica agora. "
+                    "Pode me repetir o que o senhor disse?")
 
-    # 3. Envia áudio (ElevenLabs) se disponível, texto como fallback
+    # 4. Envia áudio (ElevenLabs) se disponível, texto como fallback
     audio = await text_to_speech(resposta)
     if audio:
         await send_audio(from_number, audio)
     else:
         await send_text(from_number, resposta)
 
-    # 4. Salva interação no Zep para aprendizado
-    await zep_save(message_text, resposta, {"de": from_number, "tipo": message_type})
+    # 5. Salva interação no Zep, incluindo o perfil vocal do momento
+    meta = {"de": from_number, "tipo": message_type,
+            "quem": (contato or {}).get("nome", "?")}
+    if prosodia:
+        meta["prosodia"] = prosodia
+    await zep_save(message_text, resposta, meta)
 
-    # 5. Rastreia marcadores na resposta — em exames enviados como imagem ou PDF
+    # 6. Registra a evolução do humor como fato clínico datado — é o que
+    #    alimenta o item "humor geral do dia" do relatório familiar das 20h.
+    if prosodia and (contato or {}).get("papel") == "paciente":
+        try:
+            from integrations.zep_memory import add_clinical_fact
+            await add_clinical_fact(
+                f"Tom de voz: {tom_resumo.splitlines()[0]}", "humor")
+        except Exception as e:
+            logger.warning("Falha ao registrar humor no Zep: %s", e)
+
+    # 7. Rastreia marcadores na resposta — em exames enviados como imagem ou PDF
     #    os valores só aparecem depois que o modelo lê o documento.
     await check_clinical_alerts(resposta, from_number)
 
+    # 8. Sinais vocais persistentes de sofrimento escalam para a família
+    if desvios and (contato or {}).get("papel") == "paciente":
+        await avaliar_escalonamento_vocal(desvios, tom_resumo)
+
     logger.info("Resposta enviada para %s (%d chars)", from_number, len(resposta))
+
+
+# ─── Linha de base vocal e escalonamento ──────────────────────────────────────
+_baseline_cache: dict[str, str] | None = None
+
+
+async def obter_baseline_vocal() -> dict[str, str] | None:
+    """
+    Recupera o perfil vocal habitual do Sr. Edilson, gravado no Zep pelo
+    script setup_voice.py a partir dos áudios de referência. Fica em cache
+    porque muda raramente.
+    """
+    global _baseline_cache
+    if _baseline_cache is not None:
+        return _baseline_cache or None
+    try:
+        from integrations.zep_memory import get_facts
+        for f in await get_facts("voz_baseline"):
+            texto = f.get("fact", "")
+            if texto.startswith("BASELINE_VOCAL:"):
+                _baseline_cache = _parse_prosodia(texto.split(":", 1)[1].replace(";", "\n"))
+                return _baseline_cache
+    except Exception as e:
+        logger.warning("Falha ao ler baseline vocal: %s", e)
+    _baseline_cache = {}
+    return None
+
+
+# Quantas mensagens seguidas com sinal de sofrimento antes de avisar a família.
+# Uma nota de voz cansada é normal; três seguidas indicam tendência.
+VOZ_ALERTA_LIMIAR = int(os.getenv("VOZ_ALERTA_LIMIAR", "3"))
+_historico_desvios: list[str] = []
+
+
+async def avaliar_escalonamento_vocal(desvios: list[str], resumo: str) -> None:
+    """
+    Acumula sinais vocais preocupantes e avisa a família quando houver
+    persistência — evitando alarmar por causa de um único dia ruim.
+    """
+    _historico_desvios.append("; ".join(desvios))
+    if len(_historico_desvios) > VOZ_ALERTA_LIMIAR:
+        _historico_desvios.pop(0)
+
+    if len(_historico_desvios) >= VOZ_ALERTA_LIMIAR and FAMILY_GROUP_ID:
+        await send_text(
+            FAMILY_GROUP_ID,
+            f"💛 Observação sobre o Sr. Edilson\n\n"
+            f"Nas últimas {VOZ_ALERTA_LIMIAR} mensagens de voz notei mudança "
+            f"no tom dele:\n{resumo}\n\n"
+            f"Não é um alerta médico — é um sinal de que talvez valha uma "
+            f"ligação ou visita. — Dr. João Holanda")
+        _historico_desvios.clear()
 
 
 # ─── Detecção de alertas clínicos ────────────────────────────────────────────
@@ -449,10 +763,19 @@ async def whatsapp_webhook(request: Request):
     if not from_number:
         return JSONResponse({"status": "no_sender"})
 
+    # Filtro de contatos: o agente atende exclusivamente o Sr. Edilson e os
+    # três filhos. Qualquer outro número é ignorado em silêncio — sem resposta,
+    # sem processamento, sem custo de inferência.
+    contato = identificar_contato(from_number)
+    if not contato:
+        logger.info("Mensagem ignorada — remetente não autorizado: %s", from_number)
+        return JSONResponse({"status": "sender_not_allowed"})
+
     message_obj = msg.get("message", {})
     message_type = "text"
     message_text = ""
     media_parts: list[dict] = []
+    prosodia: dict[str, str] = {}
 
     # Texto simples
     if "conversation" in message_obj:
@@ -469,12 +792,15 @@ async def whatsapp_webhook(request: Request):
         if not raw:
             return JSONResponse({"status": "media_download_failed"})
 
-        message_text = await transcribe_audio(raw)
-        logger.info("Áudio transcrito: %s", message_text[:80])
-
         wav = await ogg_to_wav(raw)
         if wav:
             media_parts.append(build_media_part("audio", wav, "audio/wav"))
+            # Transcrição e prosódia em paralelo — ambas leem o mesmo WAV
+            message_text, prosodia = await asyncio.gather(
+                transcribe_audio(raw), analisar_tom_de_voz(wav))
+        else:
+            message_text = await transcribe_audio(raw)
+        logger.info("Áudio transcrito: %s", message_text[:80])
 
     # Imagem — foto de refeição ou de exame impresso
     elif "imageMessage" in message_obj:
@@ -536,7 +862,8 @@ async def whatsapp_webhook(request: Request):
 
     # Processa em background (resposta imediata ao webhook)
     asyncio.create_task(
-        process_message(from_number, message_text, message_type, media_parts))
+        process_message(from_number, message_text, message_type, media_parts,
+                        prosodia, contato))
 
     return JSONResponse({"status": "processing"})
 

@@ -16,6 +16,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY agents/       /app/
 COPY integrations/ /app/integrations/
 
+# Diretório das amostras de voz do Sr. Edilson (montado como volume — os
+# áudios são dado biométrico do paciente e nunca entram na imagem nem no git)
+RUN mkdir -p /app/voz
+
 EXPOSE 3000
 
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
