@@ -92,26 +92,17 @@ Responda em português brasileiro. Seja conciso e caloroso."""
 
 
 # ─── Zep helpers ──────────────────────────────────────────────────────────────
+# Delega para integrations/zep_memory.py em vez de reimplementar as chamadas
+# HTTP aqui — evita que os dois arquivos divirjam sobre endpoint/auth do Zep
+# CE 0.27.x (bug que já ocorreu: este arquivo usava /api/v2 + "Api-Key",
+# a API real é /api/v1 + "Bearer").
 async def zep_get_context() -> str:
     """Recupera memória contextual do Sr. Edilson no Zep."""
     if not ZEP_API_KEY:
         return "Memória Zep não configurada."
     try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.get(
-                f"{ZEP_API_URL}/api/v2/sessions/{ZEP_SESSION_ID}/memory",
-                headers={"Authorization": f"Api-Key {ZEP_API_KEY}"},
-                params={"lastn": 10},
-            )
-            if resp.status_code != 200:
-                return "Sem histórico anterior."
-            data = resp.json()
-            parts = []
-            if summary := data.get("summary", {}).get("content"):
-                parts.append(f"RESUMO: {summary}")
-            if facts := data.get("facts", []):
-                parts.append("FATOS: " + " | ".join(f.get("fact", "") for f in facts[:8]))
-            return "\n".join(parts) or "Primeira interação do dia."
+        from integrations.zep_memory import get_context
+        return await get_context(last_n=10)
     except Exception as e:
         logger.warning("Zep context error: %s", e)
         return "Memória temporariamente indisponível."
@@ -122,22 +113,10 @@ async def zep_save(patient_msg: str, agent_response: str, metadata: dict = None)
     if not ZEP_API_KEY:
         return
     try:
-        payload = {
-            "messages": [
-                {"role": "user", "role_type": "user", "content": patient_msg,
-                 "metadata": metadata or {}},
-                {"role": "Dr. João Holanda", "role_type": "assistant",
-                 "content": agent_response,
-                 "metadata": {"ts": datetime.now(timezone.utc).isoformat()}},
-            ]
-        }
-        async with httpx.AsyncClient(timeout=10) as client:
-            await client.post(
-                f"{ZEP_API_URL}/api/v2/sessions/{ZEP_SESSION_ID}/messages",
-                headers={"Authorization": f"Api-Key {ZEP_API_KEY}",
-                         "Content-Type": "application/json"},
-                json=payload,
-            )
+        from integrations.zep_memory import save_interaction
+        ok = await save_interaction(patient_msg, agent_response, metadata)
+        if not ok:
+            logger.warning("Zep save_interaction retornou falha.")
     except Exception as e:
         logger.warning("Zep save error: %s", e)
 
