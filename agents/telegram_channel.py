@@ -87,6 +87,15 @@ class TelegramChannel:
                 return {}
             return r.json().get("result", {})
 
+    @staticmethod
+    def _registrar_falha(tarefa: "asyncio.Task") -> None:
+        """Traz à tona exceções de tarefas em segundo plano."""
+        if tarefa.cancelled():
+            return
+        erro = tarefa.exception()
+        if erro:
+            logger.error("Falha ao tratar mensagem: %r", erro, exc_info=erro)
+
     async def enviar_texto(self, chat_id: int, texto: str) -> None:
         # Sem parse_mode, o Telegram mostra ** e _ literalmente; com ele, um
         # asterisco solto faz a API recusar a mensagem. A marcação é removida.
@@ -291,8 +300,11 @@ class TelegramChannel:
                 for u in updates or []:
                     self._offset = u["update_id"] + 1
                     # Uma tarefa por mensagem: uma inferência lenta não
-                    # segura a fila das demais
-                    asyncio.create_task(self._tratar(u))
+                    # segura a fila das demais. O callback registra falhas —
+                    # sem ele, uma exceção aqui some e a pessoa fica sem
+                    # resposta, sem nada no log.
+                    tarefa = asyncio.create_task(self._tratar(u))
+                    tarefa.add_done_callback(self._registrar_falha)
             except asyncio.CancelledError:
                 raise
             except Exception as e:

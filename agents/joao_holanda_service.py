@@ -671,27 +671,51 @@ async def text_to_speech(text: str, voice_id: str | None = None,
 
 
 # ─── Evolution API helpers ────────────────────────────────────────────────────
-async def send_text(to: str, text: str) -> None:
-    """Envia mensagem de texto via Evolution API."""
-    async with httpx.AsyncClient(timeout=15) as client:
-        await client.post(
-            f"{EVOLUTION_API_URL}/message/sendText/{WHATSAPP_INSTANCE}",
-            headers={"apikey": EVOLUTION_API_KEY, "Content-Type": "application/json"},
-            json={"number": to, "options": {"delay": 800, "presence": "composing"},
-                  "textMessage": {"text": limpar_para_texto(text)}},
-        )
+async def send_text(to: str, text: str) -> bool:
+    """
+    Envia mensagem de texto via Evolution API. Devolve se foi entregue.
+
+    O retorno importa: esta função carrega os alertas clínicos para a família.
+    Descartar a resposta fazia um alerta de PSA ou de queda sumir sem deixar
+    rastro se a instância estivesse desconectada.
+    """
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.post(
+                f"{EVOLUTION_API_URL}/message/sendText/{WHATSAPP_INSTANCE}",
+                headers={"apikey": EVOLUTION_API_KEY, "Content-Type": "application/json"},
+                json={"number": to, "options": {"delay": 800, "presence": "composing"},
+                      "textMessage": {"text": limpar_para_texto(text)}},
+            )
+            if resp.status_code in (200, 201):
+                return True
+            logger.error("WhatsApp NÃO enviado para %s: HTTP %s — %s",
+                         to, resp.status_code, resp.text[:200])
+            return False
+    except Exception as e:
+        logger.error("WhatsApp NÃO enviado para %s: %s", to, e)
+        return False
 
 
-async def send_audio(to: str, audio_bytes: bytes) -> None:
-    """Envia áudio (mp3/ogg) via Evolution API como PTT (nota de voz)."""
+async def send_audio(to: str, audio_bytes: bytes) -> bool:
+    """Envia áudio como nota de voz via Evolution API. Devolve se foi entregue."""
     b64 = base64.b64encode(audio_bytes).decode()
-    async with httpx.AsyncClient(timeout=30) as client:
-        await client.post(
-            f"{EVOLUTION_API_URL}/message/sendMedia/{WHATSAPP_INSTANCE}",
-            headers={"apikey": EVOLUTION_API_KEY, "Content-Type": "application/json"},
-            json={"number": to, "options": {"delay": 500},
-                  "mediaMessage": {"mediatype": "audio", "media": b64, "ptt": True}},
-        )
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.post(
+                f"{EVOLUTION_API_URL}/message/sendMedia/{WHATSAPP_INSTANCE}",
+                headers={"apikey": EVOLUTION_API_KEY, "Content-Type": "application/json"},
+                json={"number": to, "options": {"delay": 500},
+                      "mediaMessage": {"mediatype": "audio", "media": b64, "ptt": True}},
+            )
+            if resp.status_code in (200, 201):
+                return True
+            logger.error("Áudio NÃO enviado para %s: HTTP %s — %s",
+                         to, resp.status_code, resp.text[:200])
+            return False
+    except Exception as e:
+        logger.error("Áudio NÃO enviado para %s: %s", to, e)
+        return False
 
 
 async def download_media(media_url: str) -> bytes | None:
@@ -1080,15 +1104,18 @@ async def avaliar_escalonamento_vocal(desvios: list[str], resumo: str) -> None:
     if len(_historico_desvios) > VOZ_ALERTA_LIMIAR:
         _historico_desvios.pop(0)
 
-    if len(_historico_desvios) >= VOZ_ALERTA_LIMIAR and FAMILY_GROUP_ID:
-        await send_text(
-            FAMILY_GROUP_ID,
-            f"💛 Observação sobre o Sr. Edilson\n\n"
-            f"Nas últimas {VOZ_ALERTA_LIMIAR} mensagens de voz notei mudança "
-            f"no tom dele:\n{resumo}\n\n"
-            f"Não é um alerta médico — é um sinal de que talvez valha uma "
-            f"ligação ou visita. — Dr. João Holanda")
-        _historico_desvios.clear()
+    if len(_historico_desvios) >= VOZ_ALERTA_LIMIAR:
+        # Só zera o histórico se o aviso realmente saiu. Limpar antes faria
+        # o acúmulo recomeçar do zero, adiando o alerta por mais três notas
+        # de voz sem que ninguém soubesse.
+        if await notificar_familia(
+                f"💛 Observação sobre o Sr. Edilson\n\n"
+                f"Nas últimas {VOZ_ALERTA_LIMIAR} mensagens de voz notei mudança "
+                f"no tom dele:\n{resumo}\n\n"
+                f"Não é um alerta médico — é um sinal de que talvez valha uma "
+                f"ligação ou visita. — Dr. João Holanda",
+                critico=False):
+            _historico_desvios.clear()
 
 
 # ─── Extração estruturada de marcadores ──────────────────────────────────────
@@ -1385,6 +1412,27 @@ async def registrar_marcadores(media_parts: list[dict]) -> list[dict]:
     return marcadores
 
 
+def _em_background(corotina, descricao: str) -> None:
+    """
+    Dispara uma tarefa em segundo plano registrando qualquer exceção.
+
+    asyncio.create_task() sozinho engole a falha: se process_message estourar,
+    o paciente fica sem resposta e nada aparece no log além de um aviso
+    genérico do laço de eventos, quando aparece.
+    """
+    tarefa = asyncio.create_task(corotina)
+
+    def _ao_terminar(t: asyncio.Task) -> None:
+        if t.cancelled():
+            return
+        erro = t.exception()
+        if erro:
+            logger.error("Falha em segundo plano (%s): %r", descricao, erro,
+                         exc_info=erro)
+
+    tarefa.add_done_callback(_ao_terminar)
+
+
 # ─── Detecção de alertas clínicos ────────────────────────────────────────────
 PSA_PATTERN   = re.compile(r'PSA[:\s]+(\d+[\.,]\d+)', re.IGNORECASE)
 ETFG_PATTERN  = re.compile(r'eTFG[:\s]+(\d+)', re.IGNORECASE)
@@ -1394,30 +1442,71 @@ ETFG_PATTERN  = re.compile(r'eTFG[:\s]+(\d+)', re.IGNORECASE)
 _alertas_enviados: set[str] = set()
 
 
+async def notificar_familia(mensagem: str, critico: bool = True) -> bool:
+    """
+    Entrega um aviso à família por WhatsApp e, se falhar, pelo Telegram.
+
+    Um alerta clínico que não chega é pior que nenhum alerta: a família
+    acredita que seria avisada e não é. Por isso há canal reserva, e a falha
+    total vira registro CRITICAL — não um retorno silencioso.
+    """
+    entregue = False
+    canais: list[str] = []
+
+    if FAMILY_GROUP_ID:
+        if await send_text(FAMILY_GROUP_ID, mensagem):
+            entregue, _ = True, canais.append("WhatsApp")
+
+    # Reserva: administradores do Telegram (quem configurou o agente)
+    if not entregue and TELEGRAM_ADMIN_IDS:
+        canal = getattr(app.state, "telegram", None)
+        if canal:
+            for chat_id in TELEGRAM_ADMIN_IDS:
+                try:
+                    await canal.enviar_texto(chat_id, mensagem)
+                    entregue, _ = True, canais.append(f"Telegram/{chat_id}")
+                except Exception as e:
+                    logger.error("Telegram reserva falhou para %s: %s", chat_id, e)
+
+    if entregue:
+        logger.info("Aviso à família entregue via %s", ", ".join(canais))
+    elif critico:
+        logger.critical(
+            "ALERTA CLÍNICO NÃO ENTREGUE — nenhum canal disponível. "
+            "Conteúdo que se perderia: %s", mensagem.replace("\n", " | ")[:300])
+    else:
+        logger.warning("Aviso não entregue (nenhum canal): %s",
+                       mensagem.replace("\n", " | ")[:150])
+    return entregue
+
+
 async def check_clinical_alerts(text: str, from_number: str) -> None:
-    """Detecta valores críticos de PSA/eTFG e notifica família se necessário."""
-    if not FAMILY_GROUP_ID:
+    """Detecta valores críticos de PSA/eTFG e notifica a família."""
+    if not FAMILY_GROUP_ID and not TELEGRAM_ADMIN_IDS:
         return
 
     if m := PSA_PATTERN.search(text):
         psa = float(m.group(1).replace(",", "."))
         chave = f"psa:{psa}"
         if psa > 0.20 and chave not in _alertas_enviados:
-            _alertas_enviados.add(chave)
-            await send_text(FAMILY_GROUP_ID,
-                            f"🚨 ALERTA MÉDICO — Sr. Edilson\n"
-                            f"PSA: {psa} (acima do limite de 0,20)\n"
-                            f"Dr. João Holanda recomenda contato urgente com urologista.")
+            # A chave só é marcada APÓS a entrega. Marcá-la antes fazia um
+            # envio falho suprimir o alerta para sempre — ele nunca seria
+            # tentado de novo, porque constaria como já enviado.
+            if await notificar_familia(
+                    f"🚨 ALERTA MÉDICO — Sr. Edilson\n"
+                    f"PSA: {psa} (acima do limite de 0,20)\n"
+                    f"Dr. João Holanda recomenda contato urgente com urologista."):
+                _alertas_enviados.add(chave)
 
     if m := ETFG_PATTERN.search(text):
         etfg = int(m.group(1))
         chave = f"etfg:{etfg}"
         if etfg < 30 and chave not in _alertas_enviados:
-            _alertas_enviados.add(chave)
-            await send_text(FAMILY_GROUP_ID,
-                            f"🚨 ALERTA RENAL — Sr. Edilson\n"
-                            f"eTFG: {etfg} (estadiamento grave)\n"
-                            f"Dr. João Holanda recomenda contato urgente com nefrologista.")
+            if await notificar_familia(
+                    f"🚨 ALERTA RENAL — Sr. Edilson\n"
+                    f"eTFG: {etfg} (estadiamento grave)\n"
+                    f"Dr. João Holanda recomenda contato urgente com nefrologista."):
+                _alertas_enviados.add(chave)
 
 
 # ─── Canal de administração ──────────────────────────────────────────────────
@@ -1859,12 +1948,14 @@ async def whatsapp_webhook(request: Request):
         return JSONResponse({"status": "empty_message"})
 
     # Verifica alertas clínicos
-    asyncio.create_task(check_clinical_alerts(message_text, from_number))
+    _em_background(check_clinical_alerts(message_text, from_number),
+                   "alertas clínicos")
 
     # Processa em background (resposta imediata ao webhook)
-    asyncio.create_task(
+    _em_background(
         process_message(from_number, message_text, message_type, media_parts,
-                        prosodia, contato))
+                        prosodia, contato),
+        f"atendimento de {from_number}")
 
     return JSONResponse({"status": "processing"})
 
@@ -1879,13 +1970,21 @@ async def camera_webhook(request: Request):
     event_type = body.get("event", "unknown")
     description = body.get("description", "Evento detectado pela câmera.")
 
-    if event_type in ("fall_detected", "immobility") and FAMILY_GROUP_ID:
+    if event_type in ("fall_detected", "immobility"):
         alerta = (f"🚨 ALERTA DE SEGURANÇA — Sr. Edilson\n"
                   f"Câmera cozinha detectou: {description}\n"
                   f"Por favor, verifiquem imediatamente.")
-        await send_text(FAMILY_GROUP_ID, alerta)
-        await zep_save(f"[CÂMERA] {description}",
-                       "Alerta enviado à família.", {"tipo": "emergencia"})
+        entregue = await notificar_familia(alerta)
+        await zep_save(
+            f"[CÂMERA] {description}",
+            "Alerta entregue à família." if entregue
+            else "FALHA AO ENTREGAR o alerta à família.",
+            {"tipo": "emergencia", "entregue": entregue})
+        # Quem chamou (a câmera) precisa saber se o aviso chegou, para
+        # poder tentar outro caminho — SMS, ligação — se não chegou.
+        return JSONResponse({"status": "ok" if entregue else "alerta_nao_entregue",
+                             "event": event_type, "entregue": entregue},
+                            status_code=200 if entregue else 502)
 
     return JSONResponse({"status": "ok", "event": event_type})
 
