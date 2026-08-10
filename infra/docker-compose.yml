@@ -211,7 +211,8 @@ services:
     volumes:
       # Amostras de voz do Sr. Edilson — dado biométrico do paciente.
       # Montadas como volume, fora da imagem e fora do repositório git.
-      - ./voz:/app/voz:ro
+      # Gravável: a página /voz escreve as amostras enviadas pelo navegador
+      - ./voz:/app/voz
       # Ficha clínica e laudos do Sr. Edilson — dados de saúde
       # identificáveis, montados como volume e fora do repositório.
       - ./conhecimento:/app/conhecimento:ro

@@ -6,3 +6,5 @@ pydantic==2.8.2
 # Renderiza páginas de PDF (exames laboratoriais) como imagem, em memória.
 # O Nemotron Omni lê imagem e vídeo, mas não aceita PDF diretamente.
 pymupdf==1.24.14
+# Upload das amostras de voz pelo navegador (formulário multipart)
+python-multipart==0.0.12

@@ -14,6 +14,7 @@ import re
 import secrets
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -404,26 +405,105 @@ async def ask_dr_joao(message: str, memoria: str,
 
 
 # ─── ElevenLabs TTS ───────────────────────────────────────────────────────────
+ELEVENLABS_MODEL = os.getenv("ELEVENLABS_MODEL", "eleven_multilingual_v2")
+# Um idoso cansa com áudio longo. Acima disso, corta no fim de uma frase.
+TTS_MAX_CARACTERES = int(os.getenv("TTS_MAX_CARACTERES", "900"))
+# Ritmo levemente mais pausado, para escuta confortável aos 76 anos
+TTS_VELOCIDADE = float(os.getenv("TTS_VELOCIDADE", "0.92"))
+
+# Marcações que ficam ruins quando lidas em voz alta
+_RE_MARKDOWN = re.compile(r"[*_`#>]+")
+_RE_EMOJI = re.compile(
+    "[\U0001F300-\U0001FAFF\U00002600-\U000027BF\U0001F1E6-\U0001F1FF]+")
+_RE_BULLET = re.compile(r"^\s*[-•▪●]\s*", re.MULTILINE)
+_RE_ESPACOS = re.compile(r"\n{3,}")
+
+
+def preparar_para_voz(texto: str) -> str:
+    """
+    Limpa o texto antes de virar áudio. Asterisco, emoji e marcador de lista
+    são lidos literalmente ou viram ruído — nada disso deve chegar ao ouvido
+    do Sr. Edilson.
+    """
+    t = _RE_EMOJI.sub("", texto)
+    t = _RE_MARKDOWN.sub("", t)
+    t = _RE_BULLET.sub("", t)
+    t = _RE_ESPACOS.sub("\n\n", t).strip()
+
+    if len(t) <= TTS_MAX_CARACTERES:
+        return t
+
+    # Corta no fim da última frase inteira que couber, para não truncar no meio
+    corte = t[:TTS_MAX_CARACTERES]
+    fim = max(corte.rfind(". "), corte.rfind("! "), corte.rfind("? "),
+              corte.rfind("\n"))
+    if fim > TTS_MAX_CARACTERES * 0.6:
+        corte = corte[:fim + 1]
+    logger.info("Texto encurtado para áudio: %d → %d caracteres",
+                len(t), len(corte))
+    return corte.strip()
+
+
 async def text_to_speech(text: str) -> bytes | None:
-    """Gera áudio com a voz do Dr. João Holanda via ElevenLabs."""
+    """
+    Gera áudio com a voz do Dr. João Holanda via ElevenLabs.
+    Devolve None quando a voz não está disponível — o canal então responde
+    por escrito, sem interromper o atendimento.
+    """
     if not ELEVENLABS_API_KEY or not ELEVENLABS_VOICE_ID:
         return None
+
+    falado = preparar_para_voz(text)
+    if not falado:
+        return None
+
     try:
-        async with httpx.AsyncClient(timeout=30) as client:
+        async with httpx.AsyncClient(timeout=90) as client:
             resp = await client.post(
                 f"https://api.elevenlabs.io/v1/text-to-speech/{ELEVENLABS_VOICE_ID}",
                 headers={"xi-api-key": ELEVENLABS_API_KEY,
                          "Content-Type": "application/json"},
                 json={
-                    "text": text,
-                    "model_id": "eleven_multilingual_v2",
-                    "voice_settings": {"stability": 0.6, "similarity_boost": 0.8,
-                                       "style": 0.2, "use_speaker_boost": True},
+                    "text": falado,
+                    "model_id": ELEVENLABS_MODEL,
+                    "voice_settings": {
+                        # Estabilidade alta mantém o timbre constante entre as
+                        # respostas — voz que oscila soa como outra pessoa.
+                        "stability": 0.65,
+                        "similarity_boost": 0.85,
+                        "style": 0.15,
+                        "use_speaker_boost": True,
+                        "speed": TTS_VELOCIDADE,
+                    },
                 },
             )
-            return resp.content if resp.status_code == 200 else None
+
+            if resp.status_code == 200:
+                return resp.content
+
+            # Falhas silenciosas aqui já custaram tempo antes: sem log claro,
+            # a única pista era o agente responder por escrito sem explicação.
+            detalhe = resp.text[:220]
+            if resp.status_code == 401:
+                logger.error("ElevenLabs recusou a chave (401). Verifique "
+                             "ELEVENLABS_API_KEY. Detalhe: %s", detalhe)
+            elif resp.status_code == 404:
+                logger.error("Voz não encontrada (404). Verifique "
+                             "ELEVENLABS_VOICE_ID=%s. Detalhe: %s",
+                             ELEVENLABS_VOICE_ID, detalhe)
+            elif resp.status_code == 422:
+                logger.error("ElevenLabs rejeitou os parâmetros (422) — o "
+                             "modelo %s pode não aceitar 'speed'. Detalhe: %s",
+                             ELEVENLABS_MODEL, detalhe)
+            elif resp.status_code == 429:
+                logger.error("Cota do ElevenLabs esgotada (429). Detalhe: %s",
+                             detalhe)
+            else:
+                logger.error("ElevenLabs HTTP %s: %s", resp.status_code, detalhe)
+            return None
+
     except Exception as e:
-        logger.warning("ElevenLabs error: %s", e)
+        logger.error("Falha ao gerar áudio: %s", e)
         return None
 
 
@@ -1658,6 +1738,305 @@ async def add_fact(request: Request):
         return JSONResponse({"status": "ok" if ok else "falhou", "fato": fact})
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ─── Gestão da voz do Dr. João Holanda ────────────────────────────────────────
+DIR_VOZ = Path(os.getenv("DIR_VOZ", "/app/voz"))
+SEMITONS_PADRAO = float(os.getenv("VOZ_SEMITONS", "-2.0"))
+
+
+async def _elevenlabs_conta() -> dict:
+    """Consulta cota e plano da conta, para exibir na página de voz."""
+    if not ELEVENLABS_API_KEY:
+        return {}
+    try:
+        async with httpx.AsyncClient(timeout=20) as client:
+            r = await client.get("https://api.elevenlabs.io/v1/user/subscription",
+                                 headers={"xi-api-key": ELEVENLABS_API_KEY})
+            if r.status_code != 200:
+                return {"erro": f"HTTP {r.status_code}: {r.text[:150]}"}
+            d = r.json()
+            return {
+                "plano": d.get("tier", "?"),
+                "usados": d.get("character_count", 0),
+                "limite": d.get("character_limit", 0),
+                "pode_clonar": d.get("can_use_instant_voice_cloning", False),
+            }
+    except Exception as e:
+        return {"erro": str(e)[:150]}
+
+
+@app.post("/voz/amostra")
+async def enviar_amostra(request: Request):
+    """
+    Recebe uma amostra de áudio do Sr. Edilson e a guarda em /app/voz.
+    Existe porque transferir arquivo para a VPS por scp se mostrou frágil —
+    pelo navegador é mais direto.
+    """
+    require_token(request)
+    form = await request.form()
+    arquivo = form.get("arquivo")
+    if arquivo is None or not hasattr(arquivo, "read"):
+        raise HTTPException(status_code=400, detail="Envie o campo 'arquivo'")
+
+    nome = os.path.basename(getattr(arquivo, "filename", "") or "amostra.ogg")
+    if not re.fullmatch(r"[\w.\- ]+\.(ogg|mp3|m4a|wav|opus|webm)", nome, re.IGNORECASE):
+        raise HTTPException(status_code=400,
+                            detail="Formato não aceito. Use ogg, mp3, m4a, wav ou webm.")
+
+    dados = await arquivo.read()
+    if len(dados) < 2000:
+        raise HTTPException(status_code=400, detail="Arquivo pequeno demais")
+    if len(dados) > 25 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Arquivo acima de 25 MB")
+
+    try:
+        DIR_VOZ.mkdir(parents=True, exist_ok=True)
+        destino = DIR_VOZ / nome
+        destino.write_bytes(dados)
+    except OSError as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Não foi possível gravar em {DIR_VOZ} ({e}). O volume "
+                   f"pode estar montado como somente-leitura.")
+
+    logger.info("Amostra de voz recebida: %s (%d KB)", nome, len(dados) // 1024)
+    return JSONResponse({"status": "ok", "arquivo": nome, "bytes": len(dados)})
+
+
+@app.post("/voz/clonar")
+async def clonar_voz_endpoint(request: Request):
+    """Cria a voz do Dr. João Holanda no ElevenLabs a partir das amostras."""
+    require_token(request)
+    if not ELEVENLABS_API_KEY:
+        raise HTTPException(status_code=400,
+                            detail="ELEVENLABS_API_KEY não configurada no .env")
+
+    amostras = sorted(p for p in DIR_VOZ.glob("*")
+                      if p.suffix.lower() in (".ogg", ".mp3", ".m4a", ".wav",
+                                              ".opus", ".webm"))
+    if not amostras:
+        raise HTTPException(status_code=400,
+                            detail="Nenhuma amostra em /app/voz — envie ao menos uma.")
+
+    corpo = {}
+    try:
+        corpo = await request.json()
+    except Exception:
+        pass
+    semitons = float(corpo.get("semitons", SEMITONS_PADRAO))
+
+    try:
+        import sys
+        sys.path.insert(0, "/app")
+        from setup_voice import clonar_voz
+        voice_id = await asyncio.to_thread(clonar_voz,
+                                           [str(p) for p in amostras], semitons)
+    except Exception as e:
+        logger.error("Falha na clonagem: %s", e)
+        raise HTTPException(status_code=502, detail=f"Falha na clonagem: {e}")
+
+    if not voice_id:
+        raise HTTPException(
+            status_code=502,
+            detail="O ElevenLabs recusou a clonagem. Causa comum: o plano "
+                   "gratuito não inclui clonagem de voz (requer Starter).")
+
+    return JSONResponse({
+        "status": "ok",
+        "voice_id": voice_id,
+        "amostras": [p.name for p in amostras],
+        "semitons": semitons,
+        "proximo_passo": (
+            f"Grave no .env e reinicie:  "
+            f"echo 'ELEVENLABS_VOICE_ID={voice_id}' >> /root/automacao/.env "
+            f"&& docker compose up -d joao_holanda"),
+    })
+
+
+@app.post("/voz/testar")
+async def testar_voz(request: Request):
+    """Gera um áudio de teste com a voz configurada e devolve o MP3."""
+    require_token(request)
+    try:
+        corpo = await request.json()
+    except Exception:
+        corpo = {}
+    texto = corpo.get("texto") or (
+        "Ôxe, meu velho! Aqui é o Dr. João Holanda. "
+        "Tô aqui pra cuidar do senhor, viu? Se avexe não.")
+
+    audio = await text_to_speech(texto)
+    if not audio:
+        raise HTTPException(
+            status_code=502,
+            detail="Não foi possível gerar o áudio. Veja o motivo exato em: "
+                   "docker logs joao_holanda_agent | grep -i elevenlabs")
+    return Response(content=audio, media_type="audio/mpeg",
+                    headers={"Cache-Control": "no-store"})
+
+
+@app.get("/voz", response_class=HTMLResponse)
+async def pagina_voz(request: Request):
+    """Página para enviar amostras, clonar a voz e testar o resultado."""
+    require_token(request)
+    tk = request.query_params.get("token", "")
+
+    amostras = sorted(p.name for p in DIR_VOZ.glob("*")
+                      if p.suffix.lower() in (".ogg", ".mp3", ".m4a", ".wav",
+                                              ".opus", ".webm")) \
+        if DIR_VOZ.is_dir() else []
+    conta = await _elevenlabs_conta()
+
+    if not ELEVENLABS_API_KEY:
+        estado = ("<p class='alerta'>ELEVENLABS_API_KEY ainda não está no "
+                  "<code>.env</code>. Sem ela não dá para clonar nem falar.</p>")
+    elif conta.get("erro"):
+        estado = f"<p class='alerta'>Erro ao consultar a conta: {conta['erro']}</p>"
+    else:
+        clone = ("pode clonar voz ✓" if conta.get("pode_clonar")
+                 else "<b>plano sem clonagem</b> — requer Starter")
+        estado = (f"<p class='ok'>Conta conectada · plano <b>{conta.get('plano','?')}</b> · "
+                  f"{conta.get('usados',0):,} / {conta.get('limite',0):,} caracteres · "
+                  f"{clone}</p>".replace(",", "."))
+
+    voz_atual = (f"<p class='ok'>Voz ativa: <code>{ELEVENLABS_VOICE_ID}</code></p>"
+                 if ELEVENLABS_VOICE_ID else
+                 "<p class='alerta'>Nenhuma voz configurada ainda.</p>")
+
+    lista = ("".join(f"<li>{a}</li>" for a in amostras)
+             if amostras else "<li class='vazio'>nenhuma amostra enviada</li>")
+
+    return HTMLResponse(
+        VOZ_HTML.replace("__TOKEN__", tk).replace("__ESTADO__", estado)
+                .replace("__VOZ_ATUAL__", voz_atual).replace("__AMOSTRAS__", lista)
+                .replace("__SEMITONS__", str(SEMITONS_PADRAO)),
+        headers={"Cache-Control": "no-store"})
+
+
+VOZ_HTML = """<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Voz do Dr. João Holanda</title>
+<style>
+  body { font-family: system-ui, sans-serif; background:#0f1115; color:#e9e9e9;
+         margin:0; padding:24px 16px; line-height:1.55; }
+  .caixa { max-width:640px; margin:0 auto; }
+  h1 { font-size:1.35rem; margin:0 0 4px; }
+  h2 { font-size:1.05rem; margin:28px 0 10px; color:#cbd3e1; }
+  .sub { color:#8b93a1; font-size:.9rem; margin:0 0 20px; }
+  .painel { background:#161a21; border:1px solid #262b35; border-radius:12px;
+            padding:16px; margin-bottom:16px; }
+  .ok { color:#4ade80; margin:6px 0; } .alerta { color:#fbbf24; margin:6px 0; }
+  .erro { color:#f87171; margin:6px 0; }
+  code { background:#0f1115; padding:2px 7px; border-radius:5px; font-size:.88em; }
+  ul { margin:8px 0; padding-left:22px; } .vazio { color:#6b7280; font-style:italic; }
+  button { background:#2563eb; color:#fff; border:0; border-radius:9px;
+           padding:11px 18px; font-size:1rem; cursor:pointer; margin:4px 6px 4px 0; }
+  button:disabled { opacity:.45; cursor:default; }
+  button.sec { background:#374151; }
+  input[type=file] { width:100%; padding:10px; background:#0f1115; color:#e9e9e9;
+                     border:1px dashed #374151; border-radius:9px; }
+  input[type=number] { width:80px; padding:8px; background:#0f1115; color:#e9e9e9;
+                       border:1px solid #374151; border-radius:7px; }
+  pre { background:#0f1115; padding:12px; border-radius:9px; overflow-x:auto;
+        font-size:.85rem; white-space:pre-wrap; word-break:break-all; }
+  .passo { color:#6b7280; font-size:.85rem; }
+</style></head><body><div class="caixa">
+
+<h1>Voz do Dr. João Holanda</h1>
+<p class="sub">Sr. Edilson — Parintins, AM</p>
+
+<div class="painel">__ESTADO____VOZ_ATUAL__</div>
+
+<h2>1. Amostras da voz</h2>
+<div class="painel">
+  <p class="passo">Envie 1 a 3 áudios do Sr. Edilson falando com naturalidade,
+  de 30 segundos a 2 minutos cada, sem ruído de fundo. A voz do Dr. João será
+  criada a partir delas, alguns semitons mais grave.</p>
+  <ul>__AMOSTRAS__</ul>
+  <input type="file" id="arq" accept="audio/*,.ogg,.mp3,.m4a,.wav,.opus">
+  <button id="env">Enviar amostra</button>
+</div>
+
+<h2>2. Criar a voz</h2>
+<div class="painel">
+  <p class="passo">Semitons abaixo da voz original — a diferença natural entre
+  a voz de um pai e a de um filho:
+  <input type="number" id="semi" value="__SEMITONS__" step="0.5" min="-6" max="0"></p>
+  <button id="clonar">Clonar voz no ElevenLabs</button>
+</div>
+
+<h2>3. Ouvir</h2>
+<div class="painel">
+  <button id="testar" class="sec">Tocar teste</button>
+  <audio id="player" controls style="width:100%;margin-top:10px;display:none"></audio>
+</div>
+
+<div id="saida"></div>
+</div>
+<script>
+const T = "__TOKEN__";
+const q = T ? "?token=" + encodeURIComponent(T) : "";
+const saida = document.getElementById('saida');
+
+function msg(txt, classe) {
+  saida.innerHTML = '<div class="painel"><p class="' + (classe||'ok') + '">'
+                  + txt + '</p></div>';
+}
+function bloco(txt) {
+  saida.innerHTML = '<div class="painel"><pre>' + txt + '</pre></div>';
+}
+
+document.getElementById('env').onclick = async () => {
+  const f = document.getElementById('arq').files[0];
+  if (!f) { msg('Escolha um arquivo primeiro.', 'alerta'); return; }
+  msg('Enviando ' + f.name + '...');
+  const fd = new FormData(); fd.append('arquivo', f);
+  try {
+    const r = await fetch('/voz/amostra' + q, {method:'POST', body:fd,
+                          headers:{'X-Agent-Token': T}});
+    const d = await r.json();
+    if (!r.ok) { msg('Erro: ' + (d.detail || r.status), 'erro'); return; }
+    msg('Amostra enviada: ' + d.arquivo + ' (' + Math.round(d.bytes/1024) + ' KB)');
+    setTimeout(() => location.reload(), 900);
+  } catch (e) { msg('Falha: ' + e.message, 'erro'); }
+};
+
+document.getElementById('clonar').onclick = async (ev) => {
+  ev.target.disabled = true;
+  msg('Clonando a voz... isso leva até um minuto.');
+  try {
+    const r = await fetch('/voz/clonar' + q, {method:'POST',
+      headers:{'Content-Type':'application/json','X-Agent-Token': T},
+      body: JSON.stringify({semitons: parseFloat(document.getElementById('semi').value)})});
+    const d = await r.json();
+    if (!r.ok) { msg('Erro: ' + (d.detail || r.status), 'erro'); return; }
+    bloco('Voz criada!\\n\\nvoice_id: ' + d.voice_id
+        + '\\n\\nRode na VPS para ativar:\\n' + d.proximo_passo);
+  } catch (e) { msg('Falha: ' + e.message, 'erro'); }
+  finally { ev.target.disabled = false; }
+};
+
+document.getElementById('testar').onclick = async (ev) => {
+  ev.target.disabled = true;
+  msg('Gerando áudio de teste...');
+  try {
+    const r = await fetch('/voz/testar' + q, {method:'POST',
+      headers:{'Content-Type':'application/json','X-Agent-Token': T},
+      body: JSON.stringify({})});
+    if (!r.ok) {
+      const d = await r.json().catch(() => ({}));
+      msg('Erro: ' + (d.detail || r.status), 'erro'); return;
+    }
+    const p = document.getElementById('player');
+    p.src = URL.createObjectURL(await r.blob());
+    p.style.display = 'block'; p.play();
+    msg('Áudio gerado — é assim que o Sr. Edilson vai ouvir.');
+  } catch (e) { msg('Falha: ' + e.message, 'erro'); }
+  finally { ev.target.disabled = false; }
+};
+</script></body></html>"""
 
 
 @app.get("/modelos")
