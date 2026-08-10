@@ -184,8 +184,29 @@ async def _get_session_metadata() -> dict:
     async with httpx.AsyncClient(timeout=15) as client:
         resp = await client.get(f"{API}/sessions/{ZEP_SESSION_ID}", headers=_headers())
         if resp.status_code != 200:
+            logger.warning("Zep leitura da sessão falhou: HTTP %s — %s",
+                           resp.status_code, resp.text[:200])
             return {}
         return resp.json().get("metadata") or {}
+
+
+async def _patch_session_metadata(meta: dict) -> tuple[bool, int, str]:
+    """
+    Grava a metadata da sessão. Devolve (sucesso, status, corpo) para que o
+    diagnóstico possa mostrar o motivo exato de uma falha, em vez de só um
+    booleano — foi o que travou a investigação da memória.
+    """
+    async with httpx.AsyncClient(timeout=15) as client:
+        resp = await client.patch(
+            f"{API}/sessions/{ZEP_SESSION_ID}",
+            headers=_headers(),
+            json={"metadata": meta},
+        )
+        ok = resp.status_code in (200, 201)
+        if not ok:
+            logger.warning("Zep gravação da sessão falhou: HTTP %s — %s",
+                           resp.status_code, resp.text[:300])
+        return ok, resp.status_code, resp.text[:300]
 
 
 async def add_clinical_fact(fact: str, category: str = "clinico") -> bool:
@@ -204,16 +225,8 @@ async def add_clinical_fact(fact: str, category: str = "clinico") -> bool:
     })
     meta["clinical_facts"] = facts
 
-    async with httpx.AsyncClient(timeout=15) as client:
-        resp = await client.patch(
-            f"{API}/sessions/{ZEP_SESSION_ID}",
-            headers=_headers(),
-            json={"metadata": meta},
-        )
-        if resp.status_code != 200:
-            logger.warning("Zep add_clinical_fact falhou: HTTP %s — %s",
-                           resp.status_code, resp.text[:200])
-        return resp.status_code == 200
+    ok, _status, _corpo = await _patch_session_metadata(meta)
+    return ok
 
 
 async def remove_clinical_fact(category: str, indice: int) -> Optional[str]:
@@ -232,16 +245,9 @@ async def remove_clinical_fact(category: str, indice: int) -> Optional[str]:
     alvo = da_categoria[indice - 1]
     meta["clinical_facts"] = [f for f in fatos if f is not alvo]
 
-    async with httpx.AsyncClient(timeout=15) as client:
-        resp = await client.patch(
-            f"{API}/sessions/{ZEP_SESSION_ID}",
-            headers=_headers(),
-            json={"metadata": meta},
-        )
-        if resp.status_code != 200:
-            logger.warning("Zep remove_clinical_fact falhou: HTTP %s — %s",
-                           resp.status_code, resp.text[:200])
-            return None
+    ok, _status, _corpo = await _patch_session_metadata(meta)
+    if not ok:
+        return None
 
     logger.info("Fato removido [%s]: %s", category, alvo.get("fact", "")[:70])
     return alvo.get("fact", "")

@@ -2602,8 +2602,21 @@ async def diagnostico_memoria(request: Request):
     # 4. Ciclo completo: escreve, relê e apaga um fato de teste
     marca = f"__teste_memoria__ {datetime.now(timezone.utc).isoformat()}"
     try:
-        escreveu = await add_clinical_fact(marca, "teste")
-        passos["escrita"] = {"ok": escreveu}
+        # Grava direto pela camada baixa, para capturar status e corpo do Zep
+        from integrations.zep_memory import (_get_session_metadata,
+                                             _patch_session_metadata)
+        meta = await _get_session_metadata()
+        passos["metadata_atual"] = {
+            "chaves": sorted(meta.keys()) or "(vazia)",
+            "fatos": len(meta.get("clinical_facts", [])),
+        }
+        meta.setdefault("clinical_facts", []).append(
+            {"fact": marca, "categoria": "teste",
+             "registrado_em": datetime.now(timezone.utc).isoformat()})
+        ok, status, corpo = await _patch_session_metadata(meta)
+        passos["escrita"] = {"ok": ok, "http": status, "resposta_do_zep": corpo}
+
+        escreveu = ok
 
         relidos = await get_facts("teste")
         achou = any(marca in f.get("fact", "") for f in relidos)
