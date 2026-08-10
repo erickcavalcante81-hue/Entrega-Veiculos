@@ -241,6 +241,14 @@ Se perceber tristeza/resistência, mencione: Final Champions (PSG × Arsenal, 31
 novelas Globo (Três Graças, Quem Ama Cuida), Netflix (Dele & Dela), ou times amazonenses \
 (Fast Club, Nacional-AM).
 
+COMPLETUDE — TERMINE O QUE COMEÇOU:
+Responda a pergunta INTEIRA antes de encerrar. Se ele perguntar sobre os
+próximos exames, diga quais são, quando, por que cada um importa e o que
+ele precisa fazer para se preparar — não pare no meio nem deixe a frase
+pela metade. Prefira ser claro a ser curto: com um senhor de 76 anos,
+informação incompleta gera mais ansiedade que informação completa.
+Se o assunto for grande, organize em parágrafos curtos, mas cubra tudo.
+
 FORMATO DA RESPOSTA:
 Você conversa, não escreve documento. Nunca use asterisco, sublinhado,
 crase, cerquilha nem qualquer marcação — o WhatsApp e o Telegram mostram
@@ -409,7 +417,7 @@ async def ask_dr_joao(message: str, memoria: str,
                        or "(Ficha clínica não carregada — use apenas o que "
                           "estiver na memória e seja conservador.)"))
 
-    return await chamar_modelo(system, message, media_parts, max_tokens=1024)
+    return await chamar_modelo(system, message, media_parts)
 
 
 # ─── ElevenLabs TTS ───────────────────────────────────────────────────────────
@@ -428,6 +436,20 @@ TTS_STYLE      = float(os.getenv("TTS_STYLE", "0.0"))
 # Taxa do MP3 devolvido. 44,1 kHz a 128 kbps soa bem melhor que o padrão
 # no alto-falante pequeno de um celular.
 TTS_FORMATO    = os.getenv("TTS_FORMATO", "mp3_44100_128")
+
+# A resposta acompanha a modalidade da pergunta: quem fala ou mostra recebe
+# voz; quem escreve recebe texto. O PDF de exame fica de fora de propósito —
+# a resposta traz vários valores numéricos, e número se lê melhor do que se
+# ouve. Ajustável pelo .env.
+CANAIS_COM_VOZ = {
+    t.strip() for t in os.getenv("CANAIS_COM_VOZ", "audio,image,video").split(",")
+    if t.strip()
+}
+
+
+def deve_responder_em_voz(tipo_entrada: str) -> bool:
+    """Decide se a resposta sai falada, conforme como a mensagem chegou."""
+    return tipo_entrada in CANAIS_COM_VOZ
 
 # Marcações que ficam ruins quando lidas em voz alta
 _RE_MARKDOWN = re.compile(r"[*_`#>]+")
@@ -866,8 +888,11 @@ async def process_message(from_number: str, message_text: str,
         resposta = ("Desculpe, meu velho, tive uma dificuldade técnica agora. "
                     "Pode me repetir o que o senhor disse?")
 
-    # 4. Envia áudio (ElevenLabs) se disponível, texto como fallback
-    audio = await text_to_speech(resposta)
+    # 4. A resposta acompanha a modalidade da pergunta: falou ou mostrou,
+    #    ouve de volta; escreveu, lê de volta. Texto é sempre o fallback.
+    audio = None
+    if deve_responder_em_voz(message_type):
+        audio = await text_to_speech(resposta)
     if audio:
         await send_audio(from_number, audio)
     else:
@@ -1199,6 +1224,7 @@ async def lifespan(app: FastAPI):
             build_media_part=build_media_part,
             blocos_de_documento=blocos_de_documento,
             limpar_texto=limpar_para_texto,
+            responder_em_voz=deve_responder_em_voz,
             to_wav=ogg_to_wav,
             to_ogg=to_ogg_opus,
             tts=text_to_speech,
@@ -1619,7 +1645,7 @@ async def chat_mensagem(request: Request):
 
     # Áudio é opcional: se o ElevenLabs não estiver configurado, segue só o texto
     audio_b64 = ""
-    if body.get("com_audio"):
+    if body.get("com_audio") and deve_responder_em_voz(tipo):
         audio = await text_to_speech(resposta)
         if audio:
             audio_b64 = base64.b64encode(audio).decode()

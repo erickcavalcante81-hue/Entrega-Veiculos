@@ -29,6 +29,15 @@ GEMINI_API_KEY  = os.getenv("GEMINI_API_KEY", "")
 GEMINI_MODEL    = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 GEMINI_BASE_URL = os.getenv("GEMINI_BASE_URL",
                             "https://generativelanguage.googleapis.com/v1beta")
+# Nos modelos 2.5 o raciocínio interno é DESCONTADO do maxOutputTokens, e vem
+# em modo dinâmico por padrão (-1). Com orçamento apertado, o modelo gasta os
+# tokens pensando e a resposta chega truncada — foi o que aconteceu aqui.
+# Zero desliga o raciocínio: este agente recupera e sintetiza a ficha clínica,
+# não resolve problemas que exijam cadeia longa de dedução.
+GEMINI_THINKING_BUDGET = int(os.getenv("GEMINI_THINKING_BUDGET", "0"))
+# Teto de saída. 1024 era apertado para uma resposta que cruza ficha clínica,
+# série histórica e memória — sobretudo com o raciocínio descontando daqui.
+MAX_TOKENS_PADRAO = int(os.getenv("GEMINI_MAX_TOKENS", "2048"))
 
 NIM_API_KEY   = os.getenv("NVIDIA_NIM_API_KEY", "")
 NIM_BASE_URL  = os.getenv("NVIDIA_NIM_BASE_URL", "https://integrate.api.nvidia.com/v1")
@@ -97,6 +106,9 @@ async def _chamar_gemini(system: str, texto: str, partes: list[dict],
             "maxOutputTokens": max_tokens,
             "temperature": temperature,
             "topP": 0.9,
+            # Sem este limite explícito o raciocínio consome o orçamento de
+            # saída e a resposta ao Sr. Edilson chega pela metade.
+            "thinkingConfig": {"thinkingBudget": GEMINI_THINKING_BUDGET},
         },
     }
     if system:
@@ -121,13 +133,27 @@ async def _chamar_gemini(system: str, texto: str, partes: list[dict],
             raise RuntimeError(f"Gemini não retornou resposta (motivo: {motivo})")
 
         cand = candidatos[0]
+        fim = cand.get("finishReason", "")
         partes_resp = (cand.get("content") or {}).get("parts") or []
         texto_resp = "".join(p.get("text", "") for p in partes_resp).strip()
 
+        if fim == "MAX_TOKENS":
+            # Resposta truncada: o paciente recebe uma frase pela metade.
+            # Registrar o consumo ajuda a dimensionar maxOutputTokens.
+            uso = data.get("usageMetadata") or {}
+            logger.warning(
+                "Gemini truncou a resposta (MAX_TOKENS). Limite=%d · "
+                "saída=%s · raciocínio=%s. Aumente GEMINI_MAX_TOKENS ou "
+                "reduza GEMINI_THINKING_BUDGET.",
+                max_tokens, uso.get("candidatesTokenCount"),
+                uso.get("thoughtsTokenCount"))
+
         if not texto_resp:
-            fim = cand.get("finishReason", "")
             if fim == "MAX_TOKENS":
-                raise RuntimeError("Gemini cortou a resposta no limite de tokens")
+                raise RuntimeError(
+                    "Gemini consumiu todo o orçamento de tokens no raciocínio "
+                    "interno e não sobrou nada para a resposta. Ajuste "
+                    "GEMINI_THINKING_BUDGET (0 desliga) ou GEMINI_MAX_TOKENS.")
             raise RuntimeError(f"Gemini devolveu resposta vazia (finishReason={fim})")
         return texto_resp
 
@@ -175,13 +201,14 @@ async def _chamar_nim(system: str, texto: str, partes: list[dict],
 # ─── Interface pública ────────────────────────────────────────────────────────
 async def chamar_modelo(system: str, texto: str,
                         partes: Optional[list[dict]] = None,
-                        max_tokens: int = 1024, temperature: float = 0.6,
+                        max_tokens: int = 0, temperature: float = 0.6,
                         reasoning: bool = True) -> str:
     """
     Envia prompt e mídia ao provedor ativo e devolve o texto da resposta.
     O rascunho de raciocínio, quando existir, não é exposto.
     """
     partes = partes or []
+    max_tokens = max_tokens or MAX_TOKENS_PADRAO
     if PROVIDER == "gemini":
         return await _chamar_gemini(system, texto, partes, max_tokens, temperature)
     return await _chamar_nim(system, texto, partes, max_tokens, temperature, reasoning)

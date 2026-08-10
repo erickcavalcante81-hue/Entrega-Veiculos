@@ -48,6 +48,7 @@ class TelegramChannel:
         build_media_part: Callable[[str, bytes, str], dict],
         blocos_de_documento: Optional[Callable[[bytes, str], list[dict]]] = None,
         limpar_texto: Optional[Callable[[str], str]] = None,
+        responder_em_voz: Optional[Callable[[str], bool]] = None,
         to_wav: Optional[Callable[[bytes], Awaitable[Optional[bytes]]]] = None,
         to_ogg: Optional[Callable[[bytes], Awaitable[Optional[bytes]]]] = None,
         tts: Optional[Callable[[str], Awaitable[Optional[bytes]]]] = None,
@@ -61,6 +62,7 @@ class TelegramChannel:
         self.blocos_de_documento = blocos_de_documento or (
             lambda raw, mime: [build_media_part("image", raw, mime)])
         self.limpar_texto = limpar_texto
+        self.responder_em_voz = responder_em_voz
         self.to_wav = to_wav
         self.to_ogg = to_ogg
         self.tts = tts
@@ -229,10 +231,12 @@ class TelegramChannel:
                          "Pode me repetir o que disse?")
             return
 
-        # Voz quando o ElevenLabs estiver configurado; texto sempre, para
-        # que a resposta fique legível e registrada na conversa.
+        # A resposta acompanha a modalidade da pergunta: quem manda áudio,
+        # foto ou vídeo ouve de volta; quem escreve, lê de volta. Se a voz
+        # falhar, o texto entra no lugar para a resposta não se perder.
         enviou_voz = False
-        if self.tts:
+        if self.tts and (self.responder_em_voz is None
+                         or self.responder_em_voz(tipo)):
             audio = await self.tts(resposta)
             if audio:
                 enviou_voz = await self.enviar_voz(chat_id, audio)
