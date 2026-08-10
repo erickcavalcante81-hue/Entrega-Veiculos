@@ -1804,6 +1804,76 @@ async def enviar_amostra(request: Request):
     return JSONResponse({"status": "ok", "arquivo": nome, "bytes": len(dados)})
 
 
+@app.get("/voz/diagnostico")
+async def diagnostico_voz(request: Request):
+    """
+    Testa cada capacidade da chave separadamente, para isolar onde a
+    clonagem trava: ler a conta, listar vozes e escrever vozes exigem
+    permissões distintas na chave de API do ElevenLabs.
+    """
+    require_token(request)
+    if not ELEVENLABS_API_KEY:
+        raise HTTPException(status_code=400, detail="ELEVENLABS_API_KEY ausente")
+
+    resultado: dict[str, Any] = {}
+    h = {"xi-api-key": ELEVENLABS_API_KEY}
+
+    async with httpx.AsyncClient(timeout=30) as client:
+        # 1. A chave é válida e qual o plano
+        try:
+            r = await client.get("https://api.elevenlabs.io/v1/user/subscription",
+                                 headers=h)
+            if r.status_code == 200:
+                d = r.json()
+                resultado["assinatura"] = {
+                    "ok": True,
+                    "plano": d.get("tier"),
+                    "creditos": f"{d.get('character_count')}/{d.get('character_limit')}",
+                    "clonagem_instantanea": d.get("can_use_instant_voice_cloning"),
+                    "clonagem_profissional": d.get("can_use_professional_voice_cloning"),
+                }
+            else:
+                resultado["assinatura"] = {"ok": False, "status": r.status_code,
+                                           "corpo": r.text[:300]}
+        except Exception as e:
+            resultado["assinatura"] = {"ok": False, "erro": str(e)[:200]}
+
+        # 2. Permissão de LEITURA de vozes
+        try:
+            r = await client.get("https://api.elevenlabs.io/v1/voices", headers=h)
+            resultado["ler_vozes"] = {
+                "ok": r.status_code == 200,
+                "status": r.status_code,
+                "quantidade": len(r.json().get("voices", [])) if r.status_code == 200 else None,
+                "corpo": None if r.status_code == 200 else r.text[:300],
+            }
+        except Exception as e:
+            resultado["ler_vozes"] = {"ok": False, "erro": str(e)[:200]}
+
+        # 3. Permissão de ESCRITA — provoca o erro de propósito, com um corpo
+        #    vazio, só para ver QUAL erro volta: permissão ou validação.
+        try:
+            r = await client.post("https://api.elevenlabs.io/v1/voices/add",
+                                  headers=h, data={"name": "teste_permissao"})
+            corpo = r.text[:400]
+            sem_permissao = ("missing_permissions" in corpo.lower()
+                             or "voices_write" in corpo.lower())
+            resultado["escrever_vozes"] = {
+                # 422 aqui é bom sinal: significa que passou da permissão e
+                # parou na validação (faltam os arquivos de áudio).
+                "ok": not sem_permissao,
+                "status": r.status_code,
+                "interpretacao": ("SEM PERMISSÃO DE ESCRITA na chave"
+                                  if sem_permissao else
+                                  "permissão OK (erro de validação é esperado aqui)"),
+                "corpo": corpo,
+            }
+        except Exception as e:
+            resultado["escrever_vozes"] = {"ok": False, "erro": str(e)[:200]}
+
+    return JSONResponse(resultado)
+
+
 @app.post("/voz/clonar")
 async def clonar_voz_endpoint(request: Request):
     """Cria a voz do Dr. João Holanda no ElevenLabs a partir das amostras."""
@@ -1829,23 +1899,27 @@ async def clonar_voz_endpoint(request: Request):
     try:
         import sys
         sys.path.insert(0, "/app")
-        from setup_voice import clonar_voz
-        voice_id = await asyncio.to_thread(clonar_voz,
-                                           [str(p) for p in amostras], semitons)
+        from setup_voice import clonar_voz_detalhado
+        r = await asyncio.to_thread(clonar_voz_detalhado,
+                                    [str(p) for p in amostras], semitons)
     except Exception as e:
         logger.error("Falha na clonagem: %s", e)
         raise HTTPException(status_code=502, detail=f"Falha na clonagem: {e}")
 
-    if not voice_id:
-        raise HTTPException(
-            status_code=502,
-            detail="O ElevenLabs recusou a clonagem. Causa comum: o plano "
-                   "gratuito não inclui clonagem de voz (requer Starter).")
+    if not r.get("ok"):
+        # Mostra a resposta literal do ElevenLabs — substituí-la por um palpite
+        # já mandou o diagnóstico para o lado errado uma vez.
+        partes = [f"HTTP {r.get('status')}"]
+        if r.get("dica"):
+            partes.append(r["dica"])
+        partes.append(f"Resposta do ElevenLabs: {r.get('erro','')}")
+        raise HTTPException(status_code=502, detail=" — ".join(partes))
 
+    voice_id = r["voice_id"]
     return JSONResponse({
         "status": "ok",
         "voice_id": voice_id,
-        "amostras": [p.name for p in amostras],
+        "amostras": r.get("amostras", []),
         "semitons": semitons,
         "proximo_passo": (
             f"Grave no .env e reinicie:  "
