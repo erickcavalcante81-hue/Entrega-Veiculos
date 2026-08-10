@@ -71,9 +71,11 @@ async def ensure_user_and_session() -> bool:
             },
         }
         resp_user = await client.post(f"{API}/user", headers=_headers(), json=user_payload)
-        # 200/201 = criado; 400/409 = já existe (comportamento varia por build) — ambos OK
-        user_ok = resp_user.status_code < 500
-        if resp_user.status_code >= 500:
+        # 200/201 = criado; 400/409 = já existe (varia por build) — ambos OK.
+        # 401/403 NÃO são OK: davam "sessão criada" enquanto toda escrita
+        # falhava, escondendo o problema real de autenticação.
+        user_ok = resp_user.status_code not in (401, 403) and resp_user.status_code < 500
+        if not user_ok:
             logger.warning("Zep ensure_user falhou: HTTP %s — %s",
                            resp_user.status_code, resp_user.text[:200])
 
@@ -87,8 +89,9 @@ async def ensure_user_and_session() -> bool:
             },
         }
         resp_session = await client.post(f"{API}/sessions", headers=_headers(), json=session_payload)
-        session_ok = resp_session.status_code < 500
-        if resp_session.status_code >= 500:
+        session_ok = (resp_session.status_code not in (401, 403)
+                      and resp_session.status_code < 500)
+        if not session_ok:
             logger.warning("Zep ensure_session falhou: HTTP %s — %s",
                            resp_session.status_code, resp_session.text[:200])
 

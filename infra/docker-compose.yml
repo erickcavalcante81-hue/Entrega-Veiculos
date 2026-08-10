@@ -87,8 +87,12 @@ services:
     image: ghcr.io/getzep/zep:latest
     container_name: zep
     restart: always
-    ports:
-      - "8000:8000"
+    # Sem porta publicada: a memória clínica do paciente não deve ficar
+    # exposta na internet. Só o agente a acessa, pela rede interna do Docker
+    # (http://zep:8000). Para inspecionar do host, use:
+    #   docker exec zep wget -qO- http://localhost:8000/healthz
+    expose:
+      - "8000"
     volumes:
       - ./zep_config.yaml:/app/config.yaml:ro
     depends_on:

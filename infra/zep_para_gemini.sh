@@ -92,8 +92,13 @@ store:
   postgres:
     dsn: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/zep?sslmode=disable"
 
+# O Zep CE 0.27 espera um JWT ASSINADO com este secret, não o secret em si.
+# Enviar o secret cru devolve 401 "token is unauthorized" em toda escrita.
+# Em vez de gerar JWT, a porta do Zep deixou de ser publicada: ele só é
+# alcançável pela rede interna do Docker, o que é mais seguro do que expor
+# a memória clínica na internet com autenticação.
 auth:
-  required: true
+  required: false
   secret: "${ZEP_API_KEY}"
 
 # Camada compatível com OpenAI do Gemini: atende /chat/completions e /embeddings
