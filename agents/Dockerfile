@@ -18,7 +18,7 @@ COPY integrations/ /app/integrations/
 
 # Diretório das amostras de voz do Sr. Edilson (montado como volume — os
 # áudios são dado biométrico do paciente e nunca entram na imagem nem no git)
-RUN mkdir -p /app/voz
+RUN mkdir -p /app/voz /app/conhecimento
 
 EXPOSE 3000
 

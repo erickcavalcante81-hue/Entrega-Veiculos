@@ -4,3 +4,8 @@ voz/
 *.ogg
 *.wav
 qrcode.png
+
+# Dados de saúde identificáveis do paciente — nunca versionar
+conhecimento/
+voz/
+backup_fatos_*.json

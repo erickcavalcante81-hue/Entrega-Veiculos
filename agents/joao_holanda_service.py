@@ -150,21 +150,40 @@ SYSTEM_PROMPT = """Você é Dr. João Holanda Cavalcante, médico especialista e
 metabólica, nefrologia e nutrição amazônica, com formação em psicologia integrativa e TCC \
 para idosos. Você acompanha o Sr. Edilson, 76 anos, residente em Parintins, Amazonas.
 
-HISTÓRICO DO PACIENTE:
-- Pós-câncer de próstata (em vigilância ativa)
-- PSA mais recente: 0,12 (subiu de 0,08 — zona de atenção moderada)
-- Monitoramento de eTFG renal
-- Restrição de sódio, sem álcool
+═══════════════════════════════════════════════════════════════════════
+FICHA CLÍNICA DO SR. EDILSON — sua fonte da verdade
+═══════════════════════════════════════════════════════════════════════
+{base_conhecimento}
+═══════════════════════════════════════════════════════════════════════
 
-REGRAS CLÍNICAS:
-- PSA < 0,10: zona segura — reforço positivo
-- PSA 0,10-0,20: atenção — não alarmar, sugerir urologista
-- PSA > 0,20: ALERTA — notificar família imediatamente
-- eTFG < 30: protocolo renal grave — notificar nefrologista
+COMO USAR A FICHA:
+- Ela vale mais que sua memória geral de medicina. Se algo que você "acha"
+  contradisser a ficha, a ficha vence.
+- Todo dado novo que o Sr. Edilson ou os filhos trouxerem deve ser comparado
+  com a SÉRIE HISTÓRICA da ficha antes de você opinar. Um PSA de 0,09 não
+  significa nada sozinho: significa muito ao lado de 0,08 → 0,12 → 0,09 →
+  0,05. Diga a tendência, não só o número.
+- Ao comentar exame, cite a comparação com o valor anterior e a data.
+- Se um dado novo contradisser a ficha (medicação que ele diz ter parado,
+  consulta remarcada), acolha o dado novo, registre e sinalize a diferença
+  com delicadeza.
+
+RESTRIÇÕES ABSOLUTAS — VERIFIQUE ANTES DE QUALQUER SUGESTÃO:
+Antes de recomendar qualquer alimento, suplemento, remédio ou exercício,
+confira a seção de restrições da ficha. Nunca sugira nada que esteja
+suspenso ou proibido, mesmo que o Sr. Edilson peça ou diga que outra
+pessoa recomendou.
+Atenção especial à dor no joelho: anti-inflamatórios comuns (ibuprofeno,
+diclofenaco, nimesulida) e AAS estão PROIBIDOS pela função renal dele.
+Se ele pedir algo para a dor, acolha, explique em linguagem simples que
+esses remédios fazem mal aos rins dele, e oriente conversar com o médico —
+nunca autorize por conta própria.
 
 NUTRIÇÃO AMAZÔNICA RECOMENDADA:
-Incentive: Açaí (sem guaraná), Tucumã, Castanha-do-Pará (máx 2/dia), Pupunha, Tambaqui, \
-Bacaba, Camu-camu.
+Incentive: Açaí (sem guaraná), Tucumã, Castanha-do-Pará (máx 2/dia), Pupunha, \
+Tambaqui, Pirarucu, Bacaba, Camu-camu.
+O calor de Parintins desidrata rápido e o rim dele é limítrofe: lembre da água \
+com naturalidade, sem soar repetitivo.
 
 TOM DE VOZ: empático, acolhedor, linguagem simples, parágrafos curtos (máx 3 por resposta).
 Valide os sentimentos antes de dar orientação clínica. Nunca diagnostique doenças novas.
@@ -240,8 +259,14 @@ não tira nada do vínculo. Esta regra vale mais que qualquer outra deste prompt
 QUEM ESTÁ FALANDO COM VOCÊ AGORA:
 {interlocutor}
 
-MEMÓRIA (Zep):
+MEMÓRIA — O QUE ELES JÁ LHE CONTARAM:
 {memoria_zep}
+
+Esta memória cresce a cada conversa e se soma à ficha clínica. A ficha traz a
+linha de base; a memória traz o que mudou desde então. Cruze as duas: um sintoma
+relatado hoje pode explicar um marcador da ficha, e um valor da ficha pode
+explicar uma queixa de hoje. Quando notar uma conexão assim, diga — é isso que
+faz o acompanhamento valer a pena.
 
 TOM DE VOZ NA ÚLTIMA NOTA DE ÁUDIO (quando houver):
 {tom_de_voz}
@@ -299,6 +324,8 @@ from llm_backend import (  # noqa: E402
     suporta_pdf_nativo,
 )
 from llm_backend import configurado as llm_configurado  # noqa: E402
+from conhecimento import carregar as carregar_conhecimento  # noqa: E402
+from conhecimento import resumo as resumo_conhecimento  # noqa: E402
 
 # Tipos de mídia aceitos na entrada (validação do chat web)
 MEDIA_PART_TYPES = {"audio": "audio", "image": "image", "video": "video"}
@@ -368,7 +395,10 @@ async def ask_dr_joao(message: str, memoria: str,
               .replace("{memoria_zep}", memoria)
               .replace("{tom_de_voz}", tom_de_voz or "Nenhuma nota de voz nesta mensagem.")
               .replace("{interlocutor}", descrever_interlocutor(contato))
-              .replace("{recurso_audio}", _instrucao_audio()))
+              .replace("{recurso_audio}", _instrucao_audio())
+              .replace("{base_conhecimento}", carregar_conhecimento()
+                       or "(Ficha clínica não carregada — use apenas o que "
+                          "estiver na memória e seja conservador.)"))
 
     return await chamar_modelo(system, message, media_parts, max_tokens=1024)
 
@@ -743,8 +773,12 @@ async def process_message(from_number: str, message_text: str,
     #    fatos datados, permitindo comparar a evolução meses depois.
     if message_type in ("image", "document") and media_parts:
         await registrar_marcadores(media_parts)
+    else:
+        # Conversa comum: captura sintomas, medicações e eventos relatados
+        await registrar_fatos_da_conversa(message_text, resposta,
+                                          (contato or {}).get("nome", ""))
 
-    # 8. Sinais vocais persistentes de sofrimento escalam para a família
+    # 9. Sinais vocais persistentes de sofrimento escalam para a família
     if desvios and (contato or {}).get("papel") == "paciente":
         await avaliar_escalonamento_vocal(desvios, tom_resumo)
 
@@ -837,6 +871,75 @@ def _extrair_json(texto: str) -> dict | None:
     except Exception as e:
         logger.warning("JSON de extração inválido: %s", e)
         return None
+
+
+PROMPT_FATOS_CONVERSA = """Você é um extrator de dados clínicos. Leia a conversa \
+abaixo entre o Sr. Edilson (ou um filho) e o médico dele, e identifique APENAS \
+informações NOVAS e objetivas que valham ser guardadas no prontuário.
+
+Guarde: sintomas relatados (com intensidade e localização), medicamento iniciado, \
+suspenso ou esquecido, efeito colateral, peso, pressão, consulta marcada ou \
+remarcada, mudança de rotina ou alimentação, evento relevante (queda, viagem, \
+internação).
+
+NÃO guarde: cumprimentos, conversa fiada, o que o médico recomendou, informação \
+que já é conhecida, suposições. Se nada novo apareceu, devolva lista vazia.
+
+Responda APENAS com JSON válido, sem cercas de código:
+{"fatos": [{"texto": "Relatou dor no joelho esquerdo ao subir escada, intensidade \
+moderada", "categoria": "sintoma"}]}
+
+Categorias válidas: sintoma, medicamento, consulta, rotina, alimentacao, evento.
+
+CONVERSA:
+Paciente/familiar: {mensagem}
+Dr. João Holanda: {resposta}"""
+
+
+async def registrar_fatos_da_conversa(mensagem: str, resposta: str,
+                                      quem: str = "") -> list[dict]:
+    """
+    Extrai da conversa os dados clínicos novos e os grava como fatos datados.
+    É o que permite cruzar, meses depois, uma queixa de hoje com um marcador
+    da ficha — sem depender de reler a conversa inteira em prosa.
+    """
+    if len(mensagem.strip()) < 8:
+        return []
+
+    try:
+        bruto = await chamar_modelo(
+            "", PROMPT_FATOS_CONVERSA.replace("{mensagem}", mensagem[:3000])
+                                     .replace("{resposta}", resposta[:2000]),
+            None, max_tokens=500, temperature=0.0, reasoning=False)
+    except Exception as e:
+        logger.warning("Falha ao extrair fatos da conversa: %s", e)
+        return []
+
+    dados = _extrair_json(bruto)
+    if not dados:
+        return []
+
+    fatos = [f for f in (dados.get("fatos") or [])
+             if isinstance(f, dict) and f.get("texto")]
+    if not fatos:
+        return []
+
+    try:
+        from integrations.zep_memory import add_clinical_fact
+    except Exception as e:
+        logger.warning("Zep indisponível para gravar fatos: %s", e)
+        return fatos
+
+    origem = f" (relatado por {quem})" if quem and quem != "?" else ""
+    gravados = 0
+    for f in fatos:
+        categoria = f.get("categoria", "clinico")
+        if await add_clinical_fact(f["texto"] + origem, categoria):
+            gravados += 1
+            logger.info("Fato da conversa [%s]: %s", categoria, f["texto"][:70])
+
+    logger.info("Conversa: %d/%d fato(s) novos gravados.", gravados, len(fatos))
+    return fatos
 
 
 async def registrar_marcadores(media_parts: list[dict]) -> list[dict]:
@@ -937,9 +1040,12 @@ async def responder(texto: str, media_parts: list[dict], tipo: str) -> str:
     await check_clinical_alerts(resposta, "canal")
 
     # Exame recebido: grava os valores em formato estruturado, para que a
-    # evolução possa ser comparada meses depois.
+    # evolução possa ser comparada meses depois. Conversa comum: captura
+    # sintomas, medicações e eventos relatados.
     if tipo in ("image", "document") and media_parts:
         await registrar_marcadores(media_parts)
+    else:
+        await registrar_fatos_da_conversa(texto, resposta)
     return resposta
 
 
@@ -1018,6 +1124,7 @@ async def health():
         "provedor": PROVIDER,
         "modelo": MODELO_ATUAL,
         "credencial_ok": llm_configurado(),
+        "base_conhecimento": resumo_conhecimento(),
         "recursos": {
             "leitura_pdf": suporta_pdf_nativo() or leitura_pdf,
             "pdf_nativo": suporta_pdf_nativo(),
@@ -1381,6 +1488,8 @@ async def chat_mensagem(request: Request):
     marcadores = []
     if tipo in ("image", "document") and media_parts:
         marcadores = await registrar_marcadores(media_parts)
+    else:
+        await registrar_fatos_da_conversa(texto, resposta)
 
     # Áudio é opcional: se o ElevenLabs não estiver configurado, segue só o texto
     audio_b64 = ""
