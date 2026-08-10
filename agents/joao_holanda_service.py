@@ -2789,6 +2789,52 @@ document.getElementById('testar').onclick = async (ev) => {
 </script></body></html>"""
 
 
+@app.get("/telegram/contatos")
+async def contatos_telegram(request: Request):
+    """
+    Quem já escreveu ao bot: os cadastrados e os ainda desconhecidos.
+
+    Serve para cadastrar a família sem depender de bot de terceiros — basta
+    a pessoa mandar uma mensagem e o ID dela aparece aqui, junto com a linha
+    pronta para o .env.
+    """
+    require_token(request)
+    canal = getattr(app.state, "telegram", None)
+    desconhecidos = list(getattr(canal, "desconhecidos", {}).values()) if canal else []
+
+    cadastrados = [
+        {"chat_id": cid, **dados,
+         "autorizado": cid in TELEGRAM_ALLOWED_IDS,
+         "recebe_alertas": cid in TELEGRAM_FAMILIA_IDS,
+         "administrador": cid in TELEGRAM_ADMIN_IDS}
+        for cid, dados in TELEGRAM_CONTATOS.items()
+    ]
+
+    sugestao = None
+    if desconhecidos:
+        novos = ", ".join(
+            f"{d['chat_id']}:{d['nome']}:familiar:{d['nome'].split()[0]}"
+            for d in desconhecidos)
+        atuais = ", ".join(
+            f"{cid}:{d['nome']}:{d['papel']}:{d['tratamento']}"
+            for cid, d in TELEGRAM_CONTATOS.items())
+        todos_ids = ",".join(str(i) for i in
+                             sorted(set(TELEGRAM_ALLOWED_IDS) |
+                                    {d["chat_id"] for d in desconhecidos}))
+        sugestao = {
+            "TELEGRAM_CONTATOS": f'"{atuais + ", " if atuais else ""}{novos}"',
+            "TELEGRAM_ALLOWED_IDS": todos_ids,
+            "aviso": ("Ajuste o papel de cada um (paciente, filho, filha) antes "
+                      "de gravar. Depois: docker compose up -d joao_holanda"),
+        }
+
+    return JSONResponse({
+        "cadastrados": cadastrados,
+        "aguardando_cadastro": desconhecidos,
+        "sugestao_env": sugestao,
+    })
+
+
 @app.get("/modelos")
 async def modelos_disponiveis(request: Request):
     """

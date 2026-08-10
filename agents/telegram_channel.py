@@ -73,6 +73,9 @@ class TelegramChannel:
         self.transcrever = transcrever
         self._offset = 0
         self._parar = False
+        # Quem escreveu sem estar autorizado. Serve para cadastrar a família
+        # sem depender de bot de terceiros nem de leitura de log.
+        self.desconhecidos: dict[int, dict] = {}
 
     # ─── Chamadas à Bot API ──────────────────────────────────────────────────
     def _url(self, metodo: str) -> str:
@@ -219,8 +222,19 @@ class TelegramChannel:
         # Sem lista configurada, registra o ID para facilitar o cadastro inicial.
         if self.allowed_ids and chat_id not in self.allowed_ids:
             quem = msg.get("from", {})
-            logger.warning("Telegram: mensagem ignorada de chat_id=%s (%s %s)",
-                           chat_id, quem.get("first_name", ""), quem.get("username", ""))
+            nome = " ".join(x for x in (quem.get("first_name"),
+                                        quem.get("last_name")) if x)
+            self.desconhecidos[chat_id] = {
+                "chat_id": chat_id,
+                "nome": nome or "(sem nome)",
+                "usuario": quem.get("username", ""),
+                "ultima_mensagem": (msg.get("text") or "(mídia)")[:60],
+            }
+            # Guarda os 20 mais recentes, o suficiente para cadastrar a família
+            if len(self.desconhecidos) > 20:
+                self.desconhecidos.pop(next(iter(self.desconhecidos)))
+            logger.warning("Telegram: mensagem ignorada de chat_id=%s (%s @%s)",
+                           chat_id, nome, quem.get("username", ""))
             return
         if not self.allowed_ids:
             logger.warning("TELEGRAM_ALLOWED_IDS vazio — respondendo a "
