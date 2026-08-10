@@ -69,6 +69,15 @@ TELEGRAM_ADMIN_IDS = {
     if i.lstrip("-").isdigit()
 }
 
+# Quem recebe os alertas clínicos pelo Telegram. Papel distinto do de
+# administrador: os filhos precisam ser avisados de um PSA alterado ou de uma
+# queda sem por isso poderem alterar o comportamento do agente.
+# Aceita também o ID de um grupo (negativo), para avisar todos de uma vez.
+TELEGRAM_FAMILIA_IDS = {
+    int(i) for i in os.getenv("TELEGRAM_FAMILIA_IDS", "").replace(" ", "").split(",")
+    if i.lstrip("-").isdigit()
+}
+
 # Quem é cada chat_id do Telegram. Sem isto o agente não sabe com quem fala e
 # assume ser o paciente, que é quem a ficha clínica descreve.
 # Formato: "123456:Erick Cavalcante:filho:Erick, 789:Edilson:paciente:Sr. Edilson"
@@ -1455,18 +1464,24 @@ async def notificar_familia(mensagem: str, critico: bool = True) -> bool:
 
     if FAMILY_GROUP_ID:
         if await send_text(FAMILY_GROUP_ID, mensagem):
-            entregue, _ = True, canais.append("WhatsApp")
+            entregue = True
+            canais.append("WhatsApp")
 
-    # Reserva: administradores do Telegram (quem configurou o agente)
-    if not entregue and TELEGRAM_ADMIN_IDS:
+    # Telegram: destinatários da família e, na falta deles, os administradores.
+    # Enquanto o WhatsApp não estiver pareado, este é o caminho principal.
+    destinatarios = TELEGRAM_FAMILIA_IDS or TELEGRAM_ADMIN_IDS
+    if not entregue and destinatarios:
         canal = getattr(app.state, "telegram", None)
         if canal:
-            for chat_id in TELEGRAM_ADMIN_IDS:
+            for chat_id in destinatarios:
                 try:
                     await canal.enviar_texto(chat_id, mensagem)
-                    entregue, _ = True, canais.append(f"Telegram/{chat_id}")
+                    entregue = True
+                    canais.append(f"Telegram/{chat_id}")
                 except Exception as e:
-                    logger.error("Telegram reserva falhou para %s: %s", chat_id, e)
+                    logger.error("Telegram falhou para %s: %s", chat_id, e)
+        else:
+            logger.error("Canal Telegram indisponível para entregar o alerta.")
 
     if entregue:
         logger.info("Aviso à família entregue via %s", ", ".join(canais))
@@ -1482,7 +1497,7 @@ async def notificar_familia(mensagem: str, critico: bool = True) -> bool:
 
 async def check_clinical_alerts(text: str, from_number: str) -> None:
     """Detecta valores críticos de PSA/eTFG e notifica a família."""
-    if not FAMILY_GROUP_ID and not TELEGRAM_ADMIN_IDS:
+    if not FAMILY_GROUP_ID and not TELEGRAM_FAMILIA_IDS and not TELEGRAM_ADMIN_IDS:
         return
 
     if m := PSA_PATTERN.search(text):
@@ -1710,6 +1725,8 @@ async def health():
             "whatsapp": bool(EVOLUTION_API_KEY),
             "voz_elevenlabs": bool(ELEVENLABS_API_KEY and ELEVENLABS_VOICE_ID),
             "memoria_zep": bool(ZEP_API_KEY),
+            "alertas_whatsapp": bool(FAMILY_GROUP_ID),
+            "alertas_telegram": bool(TELEGRAM_FAMILIA_IDS or TELEGRAM_ADMIN_IDS),
             "autenticacao": bool(AGENT_ACCESS_TOKEN),
         },
     }

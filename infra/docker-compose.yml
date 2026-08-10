@@ -211,6 +211,8 @@ services:
       - TELEGRAM_ALLOWED_IDS=${TELEGRAM_ALLOWED_IDS:-}
       # Quem pode deixar orientações permanentes de comportamento
       - TELEGRAM_ADMIN_IDS=${TELEGRAM_ADMIN_IDS:-}
+      # Quem recebe alertas clínicos pelo Telegram (pode ser um grupo)
+      - TELEGRAM_FAMILIA_IDS=${TELEGRAM_FAMILIA_IDS:-}
       # Quem é cada chat_id: "id:Nome:papel:tratamento, ..."
       - TELEGRAM_CONTATOS=${TELEGRAM_CONTATOS:-}
       - VPS_IP=${VPS_IP}

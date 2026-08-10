@@ -42,6 +42,8 @@ add_env "TELEGRAM_BOT_TOKEN"     ""
 add_env "TELEGRAM_ALLOWED_IDS"   ""
 # Quem pode dar diretrizes de comportamento ao agente
 add_env "TELEGRAM_ADMIN_IDS"     ""
+# Quem recebe os alertas clínicos pelo Telegram
+add_env "TELEGRAM_FAMILIA_IDS"   ""
 # Identidade de cada chat_id: "id:Nome:papel:tratamento, ..."
 add_env "TELEGRAM_CONTATOS"      ""
 add_env "VOZ_ALERTA_LIMIAR"      "3"
