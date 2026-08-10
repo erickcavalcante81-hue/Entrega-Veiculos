@@ -14,8 +14,8 @@
 | Idade | 76 anos |
 | Localização | Parintins, Amazonas — Brasil |
 | Histórico oncológico | Pós-câncer de próstata (em vigilância ativa) |
-| Marcadores críticos | PSA (última referência: subida de 0,08 → 0,12) · eTFG (função renal) |
-| Contexto familiar | Filhos recebem resumo diário às 20h via WhatsApp |
+| Marcadores críticos | PSA · eTFG — **a série histórica vive em `conhecimento/`**, não aqui, para não divergir da ficha clínica |
+| Contexto familiar | Filhos recebem resumo diário às 20h via Telegram |
 
 ---
 
@@ -74,10 +74,10 @@ O agente usa temas do cotidiano para criar vínculo e abertura emocional:
 ## 3. Arquitetura Técnica
 
 ```
-WhatsApp (paciente/família)
+Telegram (paciente/família)  ← canal definitivo
         │
         ▼
-Evolution API / Twilio  ──►  Agente Dr. João Holanda (FastAPI :3000)
+Bot API oficial (long polling) ──►  Agente Dr. João Holanda (FastAPI :3000)
                                      │
               ┌──────────┬───────────┼───────────┬──────────┐
               │          │           │           │          │
@@ -107,15 +107,22 @@ Evolution API / Twilio  ──►  Agente Dr. João Holanda (FastAPI :3000)
              ElevenLabs (TTS)
                     │
                     ▼
-         WhatsApp (resposta em áudio)
+         Telegram (resposta em áudio)
 ```
+
+> **Por que Telegram e não WhatsApp:** a Meta detecta e bane números que
+> conectam via Baileys (engenharia reversa do WhatsApp Web). Dois números
+> foram perdidos nos testes, o segundo em definitivo. A Bot API do Telegram
+> é oficial, gratuita, dispensa chip e não tem risco de banimento.
+> O caminho do WhatsApp segue no código para uma futura migração à
+> **WhatsApp Business Cloud API** oficial da Meta, se houver necessidade.
 
 ### 3.1 Stack detalhado
 
 | Camada | Tecnologia | Função |
 |---|---|---|
-| Mensageria | WhatsApp Business API | Canal principal (texto, áudio, imagem, PDF) |
-| Gateway WA | Evolution API (self-hosted) ou Twilio | Webhook de entrada/saída |
+| Mensageria | **Telegram Bot API** (oficial) | Canal principal: texto, voz, foto, vídeo e PDF |
+| Transporte | Long polling (getUpdates) | Dispensa domínio, TLS e porta aberta |
 | Orquestrador | **n8n** | Fluxos, condicionais, agendamentos (cron) |
 | STT | O próprio motor multimodal (Gemini ou Nemotron Omni) | Transcrição de áudios .ogg → texto, via ffmpeg → WAV 16 kHz |
 | LLM Principal | **Google Gemini** (`gemini-2.5-flash`) ou **Nvidia NIM** (`nemotron-3-nano-omni`) — trocável por `LLM_PROVIDER` | Motor único multimodal: raciocínio clínico, leitura de exames (imagem/PDF), análise de refeições, vídeo e nota de voz |
@@ -126,7 +133,7 @@ Evolution API / Twilio  ──►  Agente Dr. João Holanda (FastAPI :3000)
 | Agenda | **Google Calendar** | Lembretes de medicação, consultas, exames |
 | Câmera | **Intelbras Mibo Smart** (RTSP) | Monitoramento de ADL e detecção de quedas |
 | Processamento câmera | **Python + ffmpeg + OpenCV** | Extração de frames e inferência Vision |
-| Alertas emergência | **n8n Webhook** | Disparo imediato para família em caso de queda |
+| Alertas emergência | Telegram, com WhatsApp como reserva | Disparo imediato à família; falha total vira log CRITICAL |
 
 ---
 
@@ -143,9 +150,9 @@ URL padrão: rtsp://admin:<SENHA>@<IP_LOCAL>:554/cam/realmonitor?channel=1&subty
 ### 4.2 Inferências da câmera
 | Evento detectado | Ação |
 |---|---|
-| Queda ou imobilidade > 2 min | Alerta imediato para grupo WhatsApp dos filhos + SMS |
+| Queda ou imobilidade > 2 min | Alerta imediato aos filhos pelo Telegram |
 | Refeição preparada | Foto capturada → análise nutricional → feedback ao paciente |
-| Ausência na cozinha > 4h (horário diurno) | Alerta leve de verificação para família |
+| Ausência na cozinha > 4h (horário diurno) | Alerta leve de verificação para a família |
 | Movimento normal | Registro de atividade no Google Sheets |
 
 ---
@@ -153,7 +160,7 @@ URL padrão: rtsp://admin:<SENHA>@<IP_LOCAL>:554/cam/realmonitor?channel=1&subty
 ## 5. Módulo de Relatório Familiar
 
 - **Horário:** cron job no n8n às **20h00 (Horário de Brasília)** todos os dias.
-- **Destinatário:** grupo WhatsApp dos filhos do Sr. Edilson.
+- **Destinatário:** contatos em `TELEGRAM_FAMILIA_IDS` (filhos ou grupo).
 - **Conteúdo do resumo diário:**
   1. Humor geral do dia (análise de tom nas mensagens)
   2. Atividade física inferida (câmera + relatos)

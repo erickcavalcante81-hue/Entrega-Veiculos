@@ -105,6 +105,12 @@ services:
   # Evolution API — gateway WhatsApp
   # ──────────────────────────────────────────
   evolution:
+    # DESATIVADA POR PADRÃO. O canal definitivo é o Telegram: a Meta bane
+    # números que conectam via Baileys, e dois já foram perdidos aqui — o
+    # segundo em definitivo. O serviço continua descrito para quando houver
+    # a WhatsApp Cloud API oficial, mas não sobe sozinho.
+    # Para iniciá-la: docker compose --profile whatsapp up -d evolution
+    profiles: ["whatsapp"]
     # Fixada na versão já validada nesta VPS. 'latest' num gateway de WhatsApp
     # muda o comportamento do Baileys sem aviso, no meio de um pareamento.
     image: ${EVOLUTION_IMAGE:-evoapicloud/evolution-api:v2.3.7}
