@@ -262,6 +262,14 @@ Se perceber tristeza/resistência, mencione: Final Champions (PSG × Arsenal, 31
 novelas Globo (Três Graças, Quem Ama Cuida), Netflix (Dele & Dela), ou times amazonenses \
 (Fast Club, Nacional-AM).
 
+MEMÓRIA — NÃO PROMETA O QUE NÃO ACONTECEU:
+{memoria_status}
+Só diga que guardou, anotou ou memorizou alguma coisa quando a linha acima
+confirmar que a gravação deu certo. Se ela disser que falhou, seja honesto:
+avise que não conseguiu guardar agora e peça para repetirem mais tarde.
+Dizer "anotei aqui com carinho" sem ter anotado é pior que não anotar —
+a pessoa confia e não repete a informação.
+
 COMPLETUDE — TERMINE O QUE COMEÇOU:
 Responda a pergunta INTEIRA antes de encerrar. Se ele perguntar sobre os
 próximos exames, diga quais são, quando, por que cada um importa e o que
@@ -462,10 +470,33 @@ def descrever_interlocutor(contato: dict[str, str] | None) -> str:
             f"tenha pedido para guardar; se houver risco à saúde dele, informe.")
 
 
+def descrever_memoria(resultado: dict | None) -> str:
+    """
+    Diz ao agente o que a gravação REALMENTE fez, para que ele não prometa
+    ter guardado algo que se perdeu. Foi assim que o problema de persistência
+    passou várias rodadas despercebido: ele confirmava sem verificar.
+    """
+    if resultado is None:
+        return ("Nada foi solicitado para guardar nesta mensagem. Não afirme "
+                "que memorizou nada.")
+    if resultado.get("nada_novo"):
+        return ("Nenhuma informação nova para guardar nesta mensagem. Não "
+                "afirme que anotou algo.")
+    if resultado.get("ok") and resultado.get("gravados"):
+        itens = "; ".join(resultado["gravados"][:5])
+        return (f"GRAVADO COM SUCESSO na memória permanente: {itens}. "
+                f"Pode confirmar à pessoa que ficou guardado.")
+    erro = resultado.get("erro") or "a gravação falhou"
+    return (f"A GRAVAÇÃO NÃO FUNCIONOU ({erro}). NÃO diga que guardou nem que "
+            f"anotou. Avise com franqueza que não conseguiu registrar agora e "
+            f"peça para lhe contarem de novo mais tarde.")
+
+
 async def ask_dr_joao(message: str, memoria: str,
                       media_parts: list[dict] | None = None,
                       tom_de_voz: str = "",
-                      contato: dict[str, str] | None = None) -> str:
+                      contato: dict[str, str] | None = None,
+                      memoria_resultado: dict | None = None) -> str:
     """
     Gera a resposta do Dr. João Holanda, combinando o system prompt da persona,
     o contexto recuperado do Zep, o perfil prosódico da nota de voz e — quando
@@ -477,6 +508,7 @@ async def ask_dr_joao(message: str, memoria: str,
               .replace("{tom_de_voz}", tom_de_voz or "Nenhuma nota de voz nesta mensagem.")
               .replace("{interlocutor}", descrever_interlocutor(contato))
               .replace("{recurso_audio}", _instrucao_audio())
+              .replace("{memoria_status}", descrever_memoria(memoria_resultado))
               .replace("{base_conhecimento}", carregar_conhecimento()
                        or "(Ficha clínica não carregada — use apenas o que "
                           "estiver na memória e seja conservador.)"))
@@ -943,10 +975,18 @@ async def process_message(from_number: str, message_text: str,
         tom_resumo, desvios = avaliar_desvio_vocal(prosodia, baseline)
         logger.info("Tom de voz: %s", tom_resumo.replace("\n", " | "))
 
+    # 2b. Pedido explícito de memorização: grava ANTES de responder, para
+    #     que o agente confirme apenas o que de fato ficou guardado.
+    mem_resultado = None
+    if _RE_PEDIDO_MEMORIA.search(message_text):
+        mem_resultado = await registrar_fatos_da_conversa(
+            message_text, "", (contato or {}).get("nome", ""))
+
     # 3. Gera resposta do Dr. João Holanda (texto + mídia na mesma inferência)
     try:
         resposta = await ask_dr_joao(message_text, memoria, media_parts,
-                                     tom_de_voz=tom_resumo, contato=contato)
+                                     tom_de_voz=tom_resumo, contato=contato,
+                                     memoria_resultado=mem_resultado)
     except Exception as e:
         logger.error("Erro na inferência NIM: %s", e)
         resposta = ("Desculpe, meu velho, tive uma dificuldade técnica agora. "
@@ -987,7 +1027,7 @@ async def process_message(from_number: str, message_text: str,
     #    fatos datados, permitindo comparar a evolução meses depois.
     if message_type in ("image", "document") and media_parts:
         await registrar_marcadores(media_parts)
-    else:
+    elif mem_resultado is None:   # já gravado acima quando houve pedido explícito
         # Conversa comum: captura sintomas, medicações e eventos relatados
         await registrar_fatos_da_conversa(message_text, resposta,
                                           (contato or {}).get("nome", ""))
@@ -1235,8 +1275,8 @@ _RE_PEDIDO_MEMORIA = re.compile(
     r"n[ãa]o esque[çc]\w*|registr[ae]\w*)\b", re.IGNORECASE)
 
 
-async def registrar_fatos_da_conversa(mensagem: str, resposta: str,
-                                      quem: str = "") -> list[dict]:
+async def registrar_fatos_da_conversa(mensagem: str, resposta: str = "",
+                                      quem: str = "") -> dict:
     """
     Extrai da conversa o que vale lembrar e grava como fatos datados: dados
     clínicos do paciente e também o contexto das pessoas em volta — onde
@@ -1265,33 +1305,33 @@ async def registrar_fatos_da_conversa(mensagem: str, resposta: str,
                                     temperature=0.0, reasoning=False)
     except Exception as e:
         logger.warning("Falha ao extrair fatos da conversa: %s", e)
-        return []
+        return {"ok": False, "gravados": [], "erro": "falha na extração"}
 
     dados = _extrair_json(bruto)
-    if not dados:
-        return []
-
-    fatos = [f for f in (dados.get("fatos") or [])
+    fatos = [f for f in ((dados or {}).get("fatos") or [])
              if isinstance(f, dict) and f.get("texto")]
     if not fatos:
-        return []
+        return {"ok": True, "gravados": [], "nada_novo": True}
 
     try:
         from integrations.zep_memory import add_clinical_fact
     except Exception as e:
         logger.warning("Zep indisponível para gravar fatos: %s", e)
-        return fatos
+        return {"ok": False, "gravados": [], "erro": "memória indisponível"}
 
     origem = f" (relatado por {quem})" if quem and quem != "?" else ""
-    gravados = 0
+    gravados: list[str] = []
     for f in fatos:
         categoria = f.get("categoria", "clinico")
         if await add_clinical_fact(f["texto"] + origem, categoria):
-            gravados += 1
+            gravados.append(f["texto"])
             logger.info("Fato da conversa [%s]: %s", categoria, f["texto"][:70])
+        else:
+            logger.warning("NÃO gravado [%s]: %s", categoria, f["texto"][:70])
 
-    logger.info("Conversa: %d/%d fato(s) novos gravados.", gravados, len(fatos))
-    return fatos
+    logger.info("Conversa: %d/%d fato(s) novos gravados.", len(gravados), len(fatos))
+    return {"ok": len(gravados) == len(fatos), "gravados": gravados,
+            "tentados": len(fatos)}
 
 
 async def registrar_marcadores(media_parts: list[dict]) -> list[dict]:
@@ -1466,8 +1506,17 @@ async def responder(texto: str, media_parts: list[dict], tipo: str,
                     contato["papel"], tipo)
 
     memoria = await zep_get_context()
+
+    # Pedido explícito de memorização: grava ANTES de responder, para que o
+    # agente confirme apenas o que de fato ficou guardado.
+    mem_resultado = None
+    if _RE_PEDIDO_MEMORIA.search(texto):
+        mem_resultado = await registrar_fatos_da_conversa(
+            texto, "", (contato or {}).get("nome", ""))
+
     resposta = await ask_dr_joao(texto, memoria, media_parts or None,
-                                 contato=contato)
+                                 contato=contato,
+                                 memoria_resultado=mem_resultado)
     await zep_save(texto, resposta,
                    {"tipo": tipo, "quem": (contato or {}).get("nome", "?")})
     await check_clinical_alerts(resposta, "canal")
@@ -1477,7 +1526,7 @@ async def responder(texto: str, media_parts: list[dict], tipo: str,
     # sintomas, medicações e eventos relatados.
     if tipo in ("image", "document") and media_parts:
         await registrar_marcadores(media_parts)
-    else:
+    elif mem_resultado is None:   # já gravado acima quando houve pedido explícito
         await registrar_fatos_da_conversa(texto, resposta,
                                           (contato or {}).get("nome", ""))
     return resposta
@@ -1912,8 +1961,14 @@ async def chat_mensagem(request: Request):
         raise HTTPException(status_code=400, detail="Envie texto ou mídia")
 
     memoria = await zep_get_context()
+
+    mem_resultado = None
+    if _RE_PEDIDO_MEMORIA.search(texto):
+        mem_resultado = await registrar_fatos_da_conversa(texto, "")
+
     try:
-        resposta = await ask_dr_joao(texto, memoria, media_parts or None)
+        resposta = await ask_dr_joao(texto, memoria, media_parts or None,
+                                     memoria_resultado=mem_resultado)
     except Exception as e:
         logger.error("Erro na inferência NIM (chat): %s", e)
         raise HTTPException(status_code=502, detail=f"Falha ao consultar o modelo: {e}")
@@ -1927,7 +1982,7 @@ async def chat_mensagem(request: Request):
     marcadores = []
     if tipo in ("image", "document") and media_parts:
         marcadores = await registrar_marcadores(media_parts)
-    else:
+    elif mem_resultado is None:
         await registrar_fatos_da_conversa(texto, resposta)
 
     # Áudio é opcional: se o ElevenLabs não estiver configurado, segue só o texto
