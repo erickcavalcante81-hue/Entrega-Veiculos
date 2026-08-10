@@ -418,6 +418,16 @@ ELEVENLABS_MODEL = os.getenv("ELEVENLABS_MODEL", "eleven_multilingual_v2")
 TTS_MAX_CARACTERES = int(os.getenv("TTS_MAX_CARACTERES", "900"))
 # Ritmo levemente mais pausado, para escuta confortável aos 76 anos
 TTS_VELOCIDADE = float(os.getenv("TTS_VELOCIDADE", "0.92"))
+# Parâmetros da síntese, ajustáveis pelo .env sem reconstruir a imagem.
+# Estabilidade alta e style em zero privilegiam clareza sobre expressividade:
+# style acima de zero acrescenta variação de entonação e é fonte frequente de
+# artefato — com um ouvinte de 76 anos, inteligibilidade vem primeiro.
+TTS_STABILITY  = float(os.getenv("TTS_STABILITY", "0.75"))
+TTS_SIMILARITY = float(os.getenv("TTS_SIMILARITY", "0.75"))
+TTS_STYLE      = float(os.getenv("TTS_STYLE", "0.0"))
+# Taxa do MP3 devolvido. 44,1 kHz a 128 kbps soa bem melhor que o padrão
+# no alto-falante pequeno de um celular.
+TTS_FORMATO    = os.getenv("TTS_FORMATO", "mp3_44100_128")
 
 # Marcações que ficam ruins quando lidas em voz alta
 _RE_MARKDOWN = re.compile(r"[*_`#>]+")
@@ -469,7 +479,8 @@ def preparar_para_voz(texto: str) -> str:
     return corte.strip()
 
 
-async def text_to_speech(text: str, voice_id: str | None = None) -> bytes | None:
+async def text_to_speech(text: str, voice_id: str | None = None,
+                         ajustes: dict | None = None) -> bytes | None:
     """
     Gera áudio com a voz do Dr. João Holanda via ElevenLabs.
     Devolve None quando a voz não está disponível — o canal então responde
@@ -479,6 +490,7 @@ async def text_to_speech(text: str, voice_id: str | None = None) -> bytes | None
     evitando o ciclo clonar → editar → reiniciar → ouvir.
     """
     voz = voice_id or ELEVENLABS_VOICE_ID
+    a = ajustes or {}
     if not ELEVENLABS_API_KEY or not voz:
         return None
 
@@ -492,17 +504,21 @@ async def text_to_speech(text: str, voice_id: str | None = None) -> bytes | None
                 f"https://api.elevenlabs.io/v1/text-to-speech/{voz}",
                 headers={"xi-api-key": ELEVENLABS_API_KEY,
                          "Content-Type": "application/json"},
+                params={"output_format": TTS_FORMATO},
                 json={
                     "text": falado,
                     "model_id": ELEVENLABS_MODEL,
                     "voice_settings": {
                         # Estabilidade alta mantém o timbre constante entre as
                         # respostas — voz que oscila soa como outra pessoa.
-                        "stability": 0.65,
-                        "similarity_boost": 0.85,
-                        "style": 0.15,
+                        "stability": a.get("stability", TTS_STABILITY),
+                        # Similaridade muito alta faz o modelo reproduzir também
+                        # o ruído da amostra original; 0,75 mantém o timbre sem
+                        # copiar o chiado da gravação de WhatsApp.
+                        "similarity_boost": a.get("similarity", TTS_SIMILARITY),
+                        "style": a.get("style", TTS_STYLE),
                         "use_speaker_boost": True,
-                        "speed": TTS_VELOCIDADE,
+                        "speed": a.get("speed", TTS_VELOCIDADE),
                     },
                 },
             )
@@ -1834,6 +1850,31 @@ async def enviar_amostra(request: Request):
     return JSONResponse({"status": "ok", "arquivo": nome, "bytes": len(dados)})
 
 
+@app.get("/voz/amostra/preview")
+async def preview_amostra(request: Request, nome: str = "", semitons: float = None):
+    """
+    Devolve a amostra já tratada — limpa, normalizada e transposta — como
+    ela será enviada ao ElevenLabs. Ouvir isto antes de clonar mostra se o
+    ruído veio da gravação original ou do processamento.
+    """
+    require_token(request)
+    arquivo = DIR_VOZ / os.path.basename(nome) if nome else None
+    if not arquivo or not arquivo.is_file():
+        raise HTTPException(status_code=404, detail=f"Amostra '{nome}' não encontrada")
+
+    st = SEMITONS_PADRAO if semitons is None else semitons
+    try:
+        import sys
+        sys.path.insert(0, "/app")
+        from setup_voice import to_wav
+        wav = await asyncio.to_thread(to_wav, str(arquivo), st)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Falha ao processar: {e}")
+
+    return Response(content=wav, media_type="audio/wav",
+                    headers={"Cache-Control": "no-store"})
+
+
 @app.get("/voz/diagnostico")
 async def diagnostico_voz(request: Request):
     """
@@ -1978,7 +2019,10 @@ async def testar_voz(request: Request):
             detail="Nenhuma voz criada ainda. Clone a voz no passo 2 antes "
                    "de tentar ouvir.")
 
-    audio = await text_to_speech(texto, voice_id=voz)
+    # Permite comparar configurações sem reconstruir o container
+    ajustes = {k: float(corpo[k]) for k in ("stability", "similarity", "style", "speed")
+               if corpo.get(k) is not None}
+    audio = await text_to_speech(texto, voice_id=voz, ajustes=ajustes)
     if not audio:
         raise HTTPException(
             status_code=502,
@@ -2016,8 +2060,11 @@ async def pagina_voz(request: Request):
                  if ELEVENLABS_VOICE_ID else
                  "<p class='alerta'>Nenhuma voz configurada ainda.</p>")
 
-    lista = ("".join(f"<li>{a}</li>" for a in amostras)
-             if amostras else "<li class='vazio'>nenhuma amostra enviada</li>")
+    tk_q = f"?token={tk}&" if tk else "?"
+    lista = ("".join(
+        f"<li>{a} <a href='/voz/amostra/preview{tk_q}nome={a}' target='_blank'>ouvir tratada</a></li>"
+        for a in amostras)
+        if amostras else "<li class='vazio'>nenhuma amostra enviada</li>")
 
     return HTMLResponse(
         VOZ_HTML.replace("__TOKEN__", tk).replace("__ESTADO__", estado)
@@ -2054,6 +2101,10 @@ VOZ_HTML = """<!doctype html>
   pre { background:#0f1115; padding:12px; border-radius:9px; overflow-x:auto;
         font-size:.85rem; white-space:pre-wrap; word-break:break-all; }
   .passo { color:#6b7280; font-size:.85rem; }
+  .linha { display:flex; flex-wrap:wrap; gap:14px; margin:12px 0; }
+  .linha label { font-size:.85rem; color:#cbd3e1; display:flex;
+                 flex-direction:column; gap:4px; }
+  li a { color:#60a5fa; font-size:.85rem; margin-left:8px; }
 </style></head><body><div class="caixa">
 
 <h1>Voz do Dr. João Holanda</h1>
@@ -2079,8 +2130,17 @@ VOZ_HTML = """<!doctype html>
   <button id="clonar">Clonar voz no ElevenLabs</button>
 </div>
 
-<h2>3. Ouvir</h2>
+<h2>3. Ouvir e ajustar</h2>
 <div class="painel">
+  <p class="passo">Se a voz sair com chiado, suba a <b>estabilidade</b> e baixe a
+  <b>similaridade</b>: similaridade alta faz o modelo reproduzir também o ruído
+  da gravação original.</p>
+  <div class="linha">
+    <label>Estabilidade <input type="number" id="stab" value="0.75" step="0.05" min="0" max="1"></label>
+    <label>Similaridade <input type="number" id="simi" value="0.75" step="0.05" min="0" max="1"></label>
+    <label>Estilo <input type="number" id="styl" value="0" step="0.05" min="0" max="1"></label>
+    <label>Velocidade <input type="number" id="vel" value="0.92" step="0.02" min="0.7" max="1.2"></label>
+  </div>
   <button id="testar" class="sec">Tocar teste</button>
   <audio id="player" controls style="width:100%;margin-top:10px;display:none"></audio>
 </div>
@@ -2141,7 +2201,12 @@ document.getElementById('testar').onclick = async (ev) => {
   try {
     const r = await fetch('/voz/testar' + q, {method:'POST',
       headers:{'Content-Type':'application/json','X-Agent-Token': T},
-      body: JSON.stringify(vozNova ? {voice_id: vozNova} : {})});
+      body: JSON.stringify(Object.assign(
+        vozNova ? {voice_id: vozNova} : {},
+        {stability: parseFloat(document.getElementById('stab').value),
+         similarity: parseFloat(document.getElementById('simi').value),
+         style: parseFloat(document.getElementById('styl').value),
+         speed: parseFloat(document.getElementById('vel').value)}))});
     if (!r.ok) {
       const d = await r.json().catch(() => ({}));
       msg('Erro: ' + (d.detail || r.status), 'erro'); return;

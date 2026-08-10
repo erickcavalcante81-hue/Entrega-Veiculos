@@ -53,29 +53,66 @@ SEMITONS_PADRAO = -2.0
 
 
 # ─── Processamento de áudio ───────────────────────────────────────────────────
+# A clonagem herda a qualidade da amostra: áudio de WhatsApp chega em OGG/Opus
+# a 16 kHz, já comprimido, e o ElevenLabs reproduz fielmente também o chiado.
+# Por isso a amostra é limpa e normalizada antes de subir.
+TAXA_SAIDA = int(os.getenv("VOZ_TAXA_SAIDA", "44100"))
+DENOISE_NF = os.getenv("VOZ_DENOISE_NF", "-25")   # piso de ruído, em dB
+
+
+def _cadeia_de_filtros(semitons: float, denoise: bool) -> str:
+    """Monta a cadeia de filtros do ffmpeg para preparar a amostra."""
+    passos = [
+        # Corta ruído de fundo grave: ar-condicionado, trânsito, manuseio
+        "highpass=f=70",
+    ]
+    if denoise:
+        # Redutor de ruído por FFT — remove o chiado constante da compressão
+        passos.append(f"afftdn=nf={DENOISE_NF}")
+
+    if semitons:
+        fator = 2 ** (semitons / 12.0)          # -2 semitons → ~0,891
+        # Transpõe o tom e devolve a duração original. O resampler soxr em
+        # alta precisão reduz bastante o artefato metálico que o atempo
+        # introduzia — era ele a maior fonte do ruído na voz clonada.
+        passos += [
+            f"asetrate={int(TAXA_SAIDA * fator)}",
+            f"aresample={TAXA_SAIDA}:resampler=soxr:precision=28",
+            f"atempo={1/fator:.6f}",
+        ]
+
+    passos += [
+        # Volume uniforme entre as amostras: variação de nível confunde a
+        # clonagem e sai como instabilidade na voz final
+        "loudnorm=I=-16:TP=-1.5:LRA=11",
+        f"aresample={TAXA_SAIDA}:resampler=soxr:precision=28",
+    ]
+    return ",".join(passos)
+
+
 def to_wav(caminho: str, semitons: float = 0.0) -> bytes:
     """
-    Converte para WAV 16 kHz mono, opcionalmente transpondo o tom.
+    Prepara a amostra para clonagem: limpa o ruído, normaliza o volume,
+    transpõe o tom e entrega WAV mono de 16 bits em alta taxa.
 
-    A transposição usa asetrate (que muda tom E duração) seguida de atempo
-    (que restaura a duração original) — assim a voz fica mais grave sem
-    ficar mais lenta, que é o efeito de "fita tocando devagar".
+    Se a redução de ruído não estiver disponível no ffmpeg instalado, refaz
+    sem ela em vez de falhar — melhor uma amostra sem denoise que nenhuma.
     """
-    fator = 2 ** (semitons / 12.0)          # -2 semitons → ~0.891
-    taxa_base = 16000
-    if semitons:
-        filtro = (f"asetrate={int(taxa_base * fator)},"
-                  f"aresample={taxa_base},"
-                  f"atempo={1/fator:.6f}")
-    else:
-        filtro = "aresample=16000"
+    def _executar(filtro: str) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            ["ffmpeg", "-hide_banner", "-loglevel", "error",
+             "-i", caminho, "-af", filtro,
+             "-ar", str(TAXA_SAIDA), "-ac", "1",
+             "-c:a", "pcm_s16le", "-f", "wav", "pipe:1"],
+            capture_output=True,
+        )
 
-    proc = subprocess.run(
-        ["ffmpeg", "-hide_banner", "-loglevel", "error",
-         "-i", caminho, "-af", filtro,
-         "-ar", str(taxa_base), "-ac", "1", "-f", "wav", "pipe:1"],
-        capture_output=True,
-    )
+    proc = _executar(_cadeia_de_filtros(semitons, denoise=True))
+    if proc.returncode != 0:
+        erro = proc.stderr.decode()[:200]
+        logger.warning("Filtro com denoise falhou (%s) — repetindo sem ele.", erro)
+        proc = _executar(_cadeia_de_filtros(semitons, denoise=False))
+
     if proc.returncode != 0:
         raise RuntimeError(f"ffmpeg falhou em {caminho}: {proc.stderr.decode()[:300]}")
     return proc.stdout
