@@ -444,13 +444,17 @@ def preparar_para_voz(texto: str) -> str:
     return corte.strip()
 
 
-async def text_to_speech(text: str) -> bytes | None:
+async def text_to_speech(text: str, voice_id: str | None = None) -> bytes | None:
     """
     Gera áudio com a voz do Dr. João Holanda via ElevenLabs.
     Devolve None quando a voz não está disponível — o canal então responde
     por escrito, sem interromper o atendimento.
+
+    voice_id permite testar uma voz recém-clonada antes de gravá-la no .env,
+    evitando o ciclo clonar → editar → reiniciar → ouvir.
     """
-    if not ELEVENLABS_API_KEY or not ELEVENLABS_VOICE_ID:
+    voz = voice_id or ELEVENLABS_VOICE_ID
+    if not ELEVENLABS_API_KEY or not voz:
         return None
 
     falado = preparar_para_voz(text)
@@ -460,7 +464,7 @@ async def text_to_speech(text: str) -> bytes | None:
     try:
         async with httpx.AsyncClient(timeout=90) as client:
             resp = await client.post(
-                f"https://api.elevenlabs.io/v1/text-to-speech/{ELEVENLABS_VOICE_ID}",
+                f"https://api.elevenlabs.io/v1/text-to-speech/{voz}",
                 headers={"xi-api-key": ELEVENLABS_API_KEY,
                          "Content-Type": "application/json"},
                 json={
@@ -490,7 +494,7 @@ async def text_to_speech(text: str) -> bytes | None:
             elif resp.status_code == 404:
                 logger.error("Voz não encontrada (404). Verifique "
                              "ELEVENLABS_VOICE_ID=%s. Detalhe: %s",
-                             ELEVENLABS_VOICE_ID, detalhe)
+                             voz, detalhe)
             elif resp.status_code == 422:
                 logger.error("ElevenLabs rejeitou os parâmetros (422) — o "
                              "modelo %s pode não aceitar 'speed'. Detalhe: %s",
@@ -1940,7 +1944,15 @@ async def testar_voz(request: Request):
         "Ôxe, meu velho! Aqui é o Dr. João Holanda. "
         "Tô aqui pra cuidar do senhor, viu? Se avexe não.")
 
-    audio = await text_to_speech(texto)
+    # Permite ouvir uma voz recém-clonada sem antes gravá-la no .env
+    voz = (corpo.get("voice_id") or "").strip() or ELEVENLABS_VOICE_ID
+    if not voz:
+        raise HTTPException(
+            status_code=400,
+            detail="Nenhuma voz criada ainda. Clone a voz no passo 2 antes "
+                   "de tentar ouvir.")
+
+    audio = await text_to_speech(texto, voice_id=voz)
     if not audio:
         raise HTTPException(
             status_code=502,
@@ -2053,6 +2065,9 @@ VOZ_HTML = """<!doctype html>
 const T = "__TOKEN__";
 const q = T ? "?token=" + encodeURIComponent(T) : "";
 const saida = document.getElementById('saida');
+// Guarda a voz recém-criada para o teste do passo 3 poder usá-la antes
+// de ela existir no .env — assim dá para ouvir e só então decidir ativar.
+let vozNova = "";
 
 function msg(txt, classe) {
   saida.innerHTML = '<div class="painel"><p class="' + (classe||'ok') + '">'
@@ -2086,8 +2101,10 @@ document.getElementById('clonar').onclick = async (ev) => {
       body: JSON.stringify({semitons: parseFloat(document.getElementById('semi').value)})});
     const d = await r.json();
     if (!r.ok) { msg('Erro: ' + (d.detail || r.status), 'erro'); return; }
+    vozNova = d.voice_id;
     bloco('Voz criada!\\n\\nvoice_id: ' + d.voice_id
-        + '\\n\\nRode na VPS para ativar:\\n' + d.proximo_passo);
+        + '\\n\\n▸ Clique em "Tocar teste" para ouvir antes de ativar.'
+        + '\\n\\n▸ Depois, rode na VPS para ativar de vez:\\n' + d.proximo_passo);
   } catch (e) { msg('Falha: ' + e.message, 'erro'); }
   finally { ev.target.disabled = false; }
 };
@@ -2098,7 +2115,7 @@ document.getElementById('testar').onclick = async (ev) => {
   try {
     const r = await fetch('/voz/testar' + q, {method:'POST',
       headers:{'Content-Type':'application/json','X-Agent-Token': T},
-      body: JSON.stringify({})});
+      body: JSON.stringify(vozNova ? {voice_id: vozNova} : {})});
     if (!r.ok) {
       const d = await r.json().catch(() => ({}));
       msg('Erro: ' + (d.detail || r.status), 'erro'); return;
