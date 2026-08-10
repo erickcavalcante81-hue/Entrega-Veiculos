@@ -2334,6 +2334,52 @@ async def enviar_amostra(request: Request):
     return JSONResponse({"status": "ok", "arquivo": nome, "bytes": len(dados)})
 
 
+@app.post("/voz/amostra/remover")
+async def remover_amostra(request: Request):
+    """
+    Apaga amostras de voz. Necessário ao trocar de voz: a clonagem usa todos
+    os arquivos da pasta, e misturar amostras antigas com novas produz um
+    timbre que não corresponde a nenhuma das duas.
+    Corpo: {"nome": "arquivo.ogg"} ou {"todas": true}
+    """
+    require_token(request)
+    try:
+        corpo = await request.json()
+    except Exception:
+        corpo = {}
+
+    if not DIR_VOZ.is_dir():
+        return JSONResponse({"removidas": [], "restantes": []})
+
+    extensoes = (".ogg", ".mp3", ".m4a", ".wav", ".opus", ".webm")
+    amostras = [p for p in DIR_VOZ.iterdir() if p.suffix.lower() in extensoes]
+
+    if corpo.get("todas"):
+        alvos = amostras
+    else:
+        nome = os.path.basename(corpo.get("nome", ""))
+        if not nome:
+            raise HTTPException(status_code=400,
+                                detail="Informe 'nome' ou 'todas': true")
+        alvos = [p for p in amostras if p.name == nome]
+        if not alvos:
+            raise HTTPException(status_code=404,
+                                detail=f"Amostra '{nome}' não encontrada")
+
+    removidas = []
+    for p in alvos:
+        try:
+            p.unlink()
+            removidas.append(p.name)
+            logger.info("Amostra de voz removida: %s", p.name)
+        except OSError as e:
+            logger.error("Falha ao remover %s: %s", p.name, e)
+
+    restantes = sorted(p.name for p in DIR_VOZ.iterdir()
+                       if p.suffix.lower() in extensoes)
+    return JSONResponse({"removidas": removidas, "restantes": restantes})
+
+
 @app.get("/voz/amostra/preview")
 async def preview_amostra(request: Request, nome: str = "", semitons: float = None):
     """
@@ -2546,7 +2592,9 @@ async def pagina_voz(request: Request):
 
     tk_q = f"?token={tk}&" if tk else "?"
     lista = ("".join(
-        f"<li>{a} <a href='/voz/amostra/preview{tk_q}nome={a}' target='_blank'>ouvir tratada</a></li>"
+        f"<li>{a} "
+        f"<a href='/voz/amostra/preview{tk_q}nome={a}' target='_blank'>ouvir tratada</a> "
+        f"<a href='#' class='rm' data-nome='{a}'>remover</a></li>"
         for a in amostras)
         if amostras else "<li class='vazio'>nenhuma amostra enviada</li>")
 
@@ -2589,6 +2637,10 @@ VOZ_HTML = """<!doctype html>
   .linha label { font-size:.85rem; color:#cbd3e1; display:flex;
                  flex-direction:column; gap:4px; }
   li a { color:#60a5fa; font-size:.85rem; margin-left:8px; }
+  li a.rm { color:#f87171; }
+  button.perigo { background:#7f1d1d; }
+  .aviso { background:#1f1a0b; border-left:3px solid #a16207; padding:10px 12px;
+           border-radius:6px; color:#d6c48a; font-size:.85rem; margin:12px 0; }
 </style></head><body><div class="caixa">
 
 <h1>Voz do Dr. João Holanda</h1>
@@ -2602,8 +2654,12 @@ VOZ_HTML = """<!doctype html>
   de 30 segundos a 2 minutos cada, sem ruído de fundo. A voz do Dr. João será
   criada a partir delas, alguns semitons mais grave.</p>
   <ul>__AMOSTRAS__</ul>
+  <p class="aviso">A clonagem usa <b>todas</b> as amostras listadas acima.
+  Para trocar de voz, remova as antigas antes de enviar as novas — misturar
+  amostras de pessoas diferentes gera um timbre que não é de nenhuma delas.</p>
   <input type="file" id="arq" accept="audio/*,.ogg,.mp3,.m4a,.wav,.opus">
   <button id="env">Enviar amostra</button>
+  <button id="limpar" class="perigo">Remover todas</button>
 </div>
 
 <h2>2. Criar a voz</h2>
@@ -2646,6 +2702,29 @@ function msg(txt, classe) {
 function bloco(txt) {
   saida.innerHTML = '<div class="painel"><pre>' + txt + '</pre></div>';
 }
+
+async function removerAmostra(corpo, confirmacao) {
+  if (confirmacao && !confirm(confirmacao)) return;
+  try {
+    const r = await fetch('/voz/amostra/remover' + q, {method:'POST',
+      headers:{'Content-Type':'application/json','X-Agent-Token': T},
+      body: JSON.stringify(corpo)});
+    const d = await r.json();
+    if (!r.ok) { msg('Erro: ' + (d.detail || r.status), 'erro'); return; }
+    msg('Removida(s): ' + (d.removidas.join(', ') || 'nenhuma')
+        + '. Restam ' + d.restantes.length + '.');
+    setTimeout(() => location.reload(), 900);
+  } catch (e) { msg('Falha: ' + e.message, 'erro'); }
+}
+
+document.querySelectorAll('a.rm').forEach(a => {
+  a.onclick = ev => { ev.preventDefault();
+    removerAmostra({nome: a.dataset.nome}, 'Remover ' + a.dataset.nome + '?'); };
+});
+
+document.getElementById('limpar').onclick = () =>
+  removerAmostra({todas: true},
+                 'Remover TODAS as amostras? A voz já clonada continua ativa.');
 
 document.getElementById('env').onclick = async () => {
   const f = document.getElementById('arq').files[0];
