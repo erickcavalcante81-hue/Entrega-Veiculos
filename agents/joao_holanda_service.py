@@ -2272,6 +2272,12 @@ async def add_fact(request: Request):
 
 # ─── Gestão da voz do Dr. João Holanda ────────────────────────────────────────
 DIR_VOZ = Path(os.getenv("DIR_VOZ", "/app/voz"))
+# Formatos aceitos como amostra de voz. '.oga' é a extensão que o WhatsApp e o
+# Telegram usam ao exportar nota de voz — mesmo contêiner Ogg do '.ogg', só o
+# nome muda. Ficar de fora fazia o upload recusar arquivos perfeitamente
+# válidos. A lista vive aqui, uma vez só: estava repetida em quatro pontos.
+EXTENSOES_VOZ = (".ogg", ".oga", ".opus", ".mp3", ".m4a", ".mp4",
+                 ".aac", ".wav", ".webm", ".flac")
 SEMITONS_PADRAO = float(os.getenv("VOZ_SEMITONS", "-2.0"))
 
 
@@ -2310,9 +2316,11 @@ async def enviar_amostra(request: Request):
         raise HTTPException(status_code=400, detail="Envie o campo 'arquivo'")
 
     nome = os.path.basename(getattr(arquivo, "filename", "") or "amostra.ogg")
-    if not re.fullmatch(r"[\w.\- ]+\.(ogg|mp3|m4a|wav|opus|webm)", nome, re.IGNORECASE):
+    if Path(nome).suffix.lower() not in EXTENSOES_VOZ or "/" in nome or "\\" in nome:
+        aceitos = ", ".join(e.lstrip(".") for e in EXTENSOES_VOZ)
         raise HTTPException(status_code=400,
-                            detail="Formato não aceito. Use ogg, mp3, m4a, wav ou webm.")
+                            detail=f"Formato não aceito ({Path(nome).suffix}). "
+                                   f"Aceitos: {aceitos}.")
 
     dados = await arquivo.read()
     if len(dados) < 2000:
@@ -2351,8 +2359,7 @@ async def remover_amostra(request: Request):
     if not DIR_VOZ.is_dir():
         return JSONResponse({"removidas": [], "restantes": []})
 
-    extensoes = (".ogg", ".mp3", ".m4a", ".wav", ".opus", ".webm")
-    amostras = [p for p in DIR_VOZ.iterdir() if p.suffix.lower() in extensoes]
+    amostras = [p for p in DIR_VOZ.iterdir() if p.suffix.lower() in EXTENSOES_VOZ]
 
     if corpo.get("todas"):
         alvos = amostras
@@ -2376,7 +2383,7 @@ async def remover_amostra(request: Request):
             logger.error("Falha ao remover %s: %s", p.name, e)
 
     restantes = sorted(p.name for p in DIR_VOZ.iterdir()
-                       if p.suffix.lower() in extensoes)
+                       if p.suffix.lower() in EXTENSOES_VOZ)
     return JSONResponse({"removidas": removidas, "restantes": restantes})
 
 
@@ -2484,8 +2491,7 @@ async def clonar_voz_endpoint(request: Request):
                             detail="ELEVENLABS_API_KEY não configurada no .env")
 
     amostras = sorted(p for p in DIR_VOZ.glob("*")
-                      if p.suffix.lower() in (".ogg", ".mp3", ".m4a", ".wav",
-                                              ".opus", ".webm"))
+                      if p.suffix.lower() in EXTENSOES_VOZ)
     if not amostras:
         raise HTTPException(status_code=400,
                             detail="Nenhuma amostra em /app/voz — envie ao menos uma.")
@@ -2569,8 +2575,7 @@ async def pagina_voz(request: Request):
     tk = request.query_params.get("token", "")
 
     amostras = sorted(p.name for p in DIR_VOZ.glob("*")
-                      if p.suffix.lower() in (".ogg", ".mp3", ".m4a", ".wav",
-                                              ".opus", ".webm")) \
+                      if p.suffix.lower() in EXTENSOES_VOZ) \
         if DIR_VOZ.is_dir() else []
     conta = await _elevenlabs_conta()
 
@@ -2657,7 +2662,7 @@ VOZ_HTML = """<!doctype html>
   <p class="aviso">A clonagem usa <b>todas</b> as amostras listadas acima.
   Para trocar de voz, remova as antigas antes de enviar as novas — misturar
   amostras de pessoas diferentes gera um timbre que não é de nenhuma delas.</p>
-  <input type="file" id="arq" accept="audio/*,.ogg,.mp3,.m4a,.wav,.opus">
+  <input type="file" id="arq" accept="audio/*,.ogg,.oga,.opus,.mp3,.m4a,.wav,.webm">
   <button id="env">Enviar amostra</button>
   <button id="limpar" class="perigo">Remover todas</button>
 </div>
