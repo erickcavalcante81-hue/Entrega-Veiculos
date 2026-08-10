@@ -2554,6 +2554,92 @@ async def modelos_disponiveis(request: Request):
     })
 
 
+@app.get("/memoria/diagnostico")
+async def diagnostico_memoria(request: Request):
+    """
+    Testa a memória de ponta a ponta: sessão, escrita, leitura e remoção.
+    Existe porque 'o agente disse que memorizou' não é prova de nada — só o
+    ciclo completo mostra em qual etapa a gravação está se perdendo.
+    """
+    require_token(request)
+    passos: dict[str, Any] = {}
+
+    try:
+        from integrations.zep_memory import (API, ZEP_SESSION_ID,
+                                             add_clinical_fact,
+                                             ensure_user_and_session, get_facts,
+                                             remove_clinical_fact)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Módulo de memória indisponível: {e}")
+
+    passos["configuracao"] = {"api": API, "sessao": ZEP_SESSION_ID,
+                              "chave_presente": bool(ZEP_API_KEY)}
+
+    # 1. O Zep responde?
+    try:
+        async with httpx.AsyncClient(timeout=10) as c:
+            r = await c.get(f"{ZEP_API_URL}/healthz")
+            passos["zep_no_ar"] = {"ok": r.status_code == 200, "status": r.status_code}
+    except Exception as e:
+        passos["zep_no_ar"] = {"ok": False, "erro": str(e)[:200]}
+
+    # 2. Usuário e sessão existem?
+    try:
+        passos["sessao"] = {"ok": await ensure_user_and_session()}
+    except Exception as e:
+        passos["sessao"] = {"ok": False, "erro": str(e)[:200]}
+
+    # 3. Quantos fatos já existem, por categoria
+    try:
+        atuais = await get_facts()
+        por_cat: dict[str, int] = {}
+        for f in atuais:
+            por_cat[f.get("categoria", "?")] = por_cat.get(f.get("categoria", "?"), 0) + 1
+        passos["fatos_existentes"] = {"total": len(atuais), "por_categoria": por_cat}
+    except Exception as e:
+        passos["fatos_existentes"] = {"erro": str(e)[:200]}
+
+    # 4. Ciclo completo: escreve, relê e apaga um fato de teste
+    marca = f"__teste_memoria__ {datetime.now(timezone.utc).isoformat()}"
+    try:
+        escreveu = await add_clinical_fact(marca, "teste")
+        passos["escrita"] = {"ok": escreveu}
+
+        relidos = await get_facts("teste")
+        achou = any(marca in f.get("fact", "") for f in relidos)
+        passos["leitura"] = {"ok": achou,
+                             "diagnostico": ("gravou e releu ✓" if achou else
+                                             "escreveu mas NÃO releu — a gravação "
+                                             "não está persistindo no Zep")}
+
+        if achou:
+            for i, f in enumerate(sorted(relidos,
+                                         key=lambda x: x.get("registrado_em", "")), 1):
+                if marca in f.get("fact", ""):
+                    passos["limpeza"] = {"removido": bool(
+                        await remove_clinical_fact("teste", i))}
+                    break
+    except Exception as e:
+        passos["escrita"] = {"ok": False, "erro": str(e)[:300]}
+
+    # 5. O que o agente enxerga como contexto
+    try:
+        ctx = await zep_get_context()
+        passos["contexto_visto_pelo_agente"] = ctx[:900]
+    except Exception as e:
+        passos["contexto_visto_pelo_agente"] = f"erro: {e}"
+
+    # 6. Identificação de contatos
+    passos["contatos_telegram"] = {
+        "mapeados": {str(k): v["nome"] + f" ({v['papel']})"
+                     for k, v in TELEGRAM_CONTATOS.items()} or
+                    "NENHUM — o agente não sabe quem é quem",
+        "administradores": sorted(TELEGRAM_ADMIN_IDS) or "nenhum",
+    }
+
+    return JSONResponse(passos)
+
+
 @app.get("/memoria/marcadores")
 async def historico_marcadores(request: Request, nome: str = ""):
     """
