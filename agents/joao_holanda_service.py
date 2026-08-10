@@ -1107,6 +1107,11 @@ que ele pergunte", "sempre pergunte da dor no joelho", "evite falar de morte", \
 NÃO são diretrizes: perguntas sobre exames, relatos de sintoma, pedidos de \
 informação, cumprimentos, testes do sistema.
 
+TAMBÉM NÃO são diretrizes — e isto é importante — informações FACTUAIS sobre \
+pessoas, mesmo quando pedem para memorizar: "eu moro em Fortaleza", "a Camila \
+é enfermeira", "meu pai não gosta de peixe". Isso é memória, guardada por \
+outro caminho. Diretriz é sobre COMO se comportar, não sobre O QUE é verdade.
+
 Responda APENAS com JSON válido, sem cercas de código:
 {"e_diretriz": true, "texto": "reescreva a diretriz em uma frase clara e \
 imperativa, na terceira pessoa, como instrução permanente"}
@@ -1184,44 +1189,80 @@ async def interpretar_como_diretriz(mensagem: str) -> str | None:
     return texto or None
 
 
-PROMPT_FATOS_CONVERSA = """Você é um extrator de dados clínicos. Leia a conversa \
-abaixo entre o Sr. Edilson (ou um filho) e o médico dele, e identifique APENAS \
-informações NOVAS e objetivas que valham ser guardadas no prontuário.
+PROMPT_FATOS_CONVERSA = """Você mantém a memória de longo prazo do Dr. João \
+Holanda. Leia a conversa abaixo e identifique informações NOVAS e objetivas que \
+valham ser lembradas nas próximas conversas.
 
-Guarde: sintomas relatados (com intensidade e localização), medicamento iniciado, \
-suspenso ou esquecido, efeito colateral, peso, pressão, consulta marcada ou \
-remarcada, mudança de rotina ou alimentação, evento relevante (queda, viagem, \
-internação).
+QUEM ESTÁ FALANDO: {quem}
 
-NÃO guarde: cumprimentos, conversa fiada, o que o médico recomendou, informação \
-que já é conhecida, suposições. Se nada novo apareceu, devolva lista vazia.
+GUARDE (sobre o paciente Sr. Edilson):
+- sintoma relatado, com intensidade e localização
+- medicamento iniciado, suspenso, esquecido ou com efeito colateral
+- peso, pressão, consulta marcada ou remarcada
+- mudança de rotina, alimentação ou atividade
+- evento relevante: queda, viagem, internação
+
+GUARDE TAMBÉM (sobre as pessoas em volta e o contexto):
+- onde alguém mora ou trabalha, mudança de cidade
+- grau de parentesco, quem cuida do quê, quem acompanha nas consultas
+- preferências, gostos, times, programas, assuntos que animam a conversa
+- correções que alguém fizer sobre um dado errado
+- qualquer coisa que a pessoa peça explicitamente para memorizar, lembrar,
+  guardar ou anotar — isso SEMPRE deve ser guardado, sem exceção
+
+NÃO guarde: cumprimentos, conversa fiada, o que o médico recomendou, \
+informação que já é conhecida, suposições suas.
+
+Escreva cada fato em terceira pessoa, com o NOME da pessoa, para que faça \
+sentido isolado meses depois. "Erick mora em Fortaleza", não "ele mora lá".
+Se nada novo apareceu, devolva lista vazia.
 
 Responda APENAS com JSON válido, sem cercas de código:
-{"fatos": [{"texto": "Relatou dor no joelho esquerdo ao subir escada, intensidade \
-moderada", "categoria": "sintoma"}]}
+{"fatos": [{"texto": "Erick, filho do Sr. Edilson, mora em Fortaleza (CE)", \
+"categoria": "familia"}]}
 
-Categorias válidas: sintoma, medicamento, consulta, rotina, alimentacao, evento.
+Categorias válidas: sintoma, medicamento, consulta, rotina, alimentacao, \
+evento, familia, perfil, preferencia.
 
 CONVERSA:
-Paciente/familiar: {mensagem}
+{quem}: {mensagem}
 Dr. João Holanda: {resposta}"""
+
+# Pedidos explícitos de memorização não podem depender do julgamento do
+# extrator: se a pessoa pediu para guardar, guarda-se.
+_RE_PEDIDO_MEMORIA = re.compile(
+    r"\b(memoriz\w+|lembr[ae]\w*|guard[ae]\w*|anot[ae]\w*|"
+    r"n[ãa]o esque[çc]\w*|registr[ae]\w*)\b", re.IGNORECASE)
 
 
 async def registrar_fatos_da_conversa(mensagem: str, resposta: str,
                                       quem: str = "") -> list[dict]:
     """
-    Extrai da conversa os dados clínicos novos e os grava como fatos datados.
+    Extrai da conversa o que vale lembrar e grava como fatos datados: dados
+    clínicos do paciente e também o contexto das pessoas em volta — onde
+    moram, quem cuida do quê, correções, preferências.
+
     É o que permite cruzar, meses depois, uma queixa de hoje com um marcador
     da ficha — sem depender de reler a conversa inteira em prosa.
     """
-    if len(mensagem.strip()) < 8:
+    pedido_explicito = bool(_RE_PEDIDO_MEMORIA.search(mensagem))
+    # Mensagem curta normalmente é cumprimento; mas se pediram para guardar,
+    # guarda-se de qualquer forma.
+    if len(mensagem.strip()) < 8 and not pedido_explicito:
         return []
 
+    prompt = (PROMPT_FATOS_CONVERSA
+              .replace("{quem}", quem or "Pessoa não identificada")
+              .replace("{mensagem}", mensagem[:3000])
+              .replace("{resposta}", resposta[:2000]))
+    if pedido_explicito:
+        prompt += ("\n\nATENÇÃO: a pessoa pediu explicitamente para memorizar "
+                   "algo nesta mensagem. Extraia esse fato obrigatoriamente, "
+                   "mesmo que pareça banal.")
+
     try:
-        bruto = await chamar_modelo(
-            "", PROMPT_FATOS_CONVERSA.replace("{mensagem}", mensagem[:3000])
-                                     .replace("{resposta}", resposta[:2000]),
-            None, max_tokens=500, temperature=0.0, reasoning=False)
+        bruto = await chamar_modelo("", prompt, None, max_tokens=600,
+                                    temperature=0.0, reasoning=False)
     except Exception as e:
         logger.warning("Falha ao extrair fatos da conversa: %s", e)
         return []
