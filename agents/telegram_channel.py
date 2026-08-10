@@ -34,7 +34,7 @@ class TelegramChannel:
     """
     Canal de conversa via Telegram.
 
-    handler: async (texto, media_parts, tipo) -> resposta em texto
+    handler: async (texto, media_parts, tipo, chat_id, nome) -> resposta em texto
     to_wav:  async (bytes) -> WAV 16 kHz (conversão do áudio recebido)
     to_ogg:  async (bytes) -> OGG/Opus (conversão da resposta em voz)
     tts:     async (texto) -> bytes de áudio, ou None
@@ -44,7 +44,7 @@ class TelegramChannel:
         self,
         token: str,
         allowed_ids: set[int],
-        handler: Callable[[str, list[dict], str], Awaitable[str]],
+        handler: Callable[..., Awaitable[str]],
         build_media_part: Callable[[str, bytes, str], dict],
         blocos_de_documento: Optional[Callable[[bytes, str], list[dict]]] = None,
         limpar_texto: Optional[Callable[[str], str]] = None,
@@ -226,7 +226,10 @@ class TelegramChannel:
         # como administrativa, ela não segue para o fluxo clínico.
         if chat_id in self.admin_ids and self.tratar_admin and tipo == "texto":
             try:
-                resposta_admin = await self.tratar_admin(texto, str(chat_id))
+                _q = msg.get("from", {})
+                _nome = " ".join(
+                    x for x in (_q.get("first_name"), _q.get("last_name")) if x)
+                resposta_admin = await self.tratar_admin(texto, _nome or str(chat_id))
             except Exception as e:
                 logger.error("Erro no comando administrativo: %s", e)
                 resposta_admin = f"Não consegui processar: {e}"
@@ -240,7 +243,11 @@ class TelegramChannel:
             return
 
         try:
-            resposta = await self.handler(texto, partes, tipo)
+            quem = msg.get("from", {})
+            nome_perfil = " ".join(
+                x for x in (quem.get("first_name"), quem.get("last_name")) if x)
+            resposta = await self.handler(texto, partes, tipo,
+                                          chat_id, nome_perfil)
         except Exception as e:
             logger.error("Erro no processamento (Telegram): %s", e)
             await self.enviar_texto(

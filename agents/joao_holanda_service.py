@@ -69,6 +69,19 @@ TELEGRAM_ADMIN_IDS = {
     if i.lstrip("-").isdigit()
 }
 
+# Quem é cada chat_id do Telegram. Sem isto o agente não sabe com quem fala e
+# assume ser o paciente, que é quem a ficha clínica descreve.
+# Formato: "123456:Erick Cavalcante:filho:Erick, 789:Edilson:paciente:Sr. Edilson"
+TELEGRAM_CONTATOS: dict[int, dict[str, str]] = {}
+for _entrada in os.getenv("TELEGRAM_CONTATOS", "").split(","):
+    _c = [x.strip() for x in _entrada.split(":") if x.strip()]
+    if len(_c) >= 3 and _c[0].lstrip("-").isdigit():
+        TELEGRAM_CONTATOS[int(_c[0])] = {
+            "nome": _c[1],
+            "papel": _c[2],
+            "tratamento": _c[3] if len(_c) > 3 else _c[1].split()[0],
+        }
+
 TELEGRAM_ALLOWED_IDS = {
     int(i) for i in os.getenv("TELEGRAM_ALLOWED_IDS", "").replace(" ", "").split(",")
     if i.lstrip("-").isdigit()
@@ -391,6 +404,31 @@ async def call_nim(messages: list[dict], max_tokens: int = 1024,
                                temperature, reasoning)
 
 
+def identificar_contato_telegram(chat_id: int,
+                                 nome_telegram: str = "") -> dict[str, str] | None:
+    """
+    Descobre quem está falando pelo Telegram.
+
+    Ordem: mapeamento explícito do .env → administrador (é quem configurou o
+    agente, portanto da família) → nome do perfil do Telegram. Nunca devolve
+    o paciente por omissão: tratar um filho como se fosse o Sr. Edilson
+    confunde e expõe informação a quem talvez não devesse recebê-la.
+    """
+    if chat_id in TELEGRAM_CONTATOS:
+        return TELEGRAM_CONTATOS[chat_id]
+
+    if chat_id in TELEGRAM_ADMIN_IDS:
+        nome = nome_telegram or "Administrador"
+        return {"nome": nome, "papel": "filho",
+                "tratamento": nome.split()[0] if nome else "você"}
+
+    if nome_telegram:
+        return {"nome": nome_telegram, "papel": "contato autorizado",
+                "tratamento": nome_telegram.split()[0]}
+
+    return None
+
+
 def _instrucao_audio() -> str:
     """
     Informa ao agente se a voz está disponível, para que ele não precise
@@ -409,7 +447,10 @@ def _instrucao_audio() -> str:
 def descrever_interlocutor(contato: dict[str, str] | None) -> str:
     """Instrui o agente sobre com quem ele está falando e como se dirigir."""
     if not contato:
-        return "Contato não identificado."
+        return ("Contato NÃO identificado. Não presuma que é o Sr. Edilson — "
+                "pode ser um dos filhos. Cumprimente sem usar nome, pergunte "
+                "com quem está falando e só então ajuste o tom. Nunca trate "
+                "alguém como o paciente sem ter certeza.")
     if contato["papel"] == "paciente":
         return (f"{contato['nome']} — o próprio paciente. Chame-o de "
                 f"'{contato['tratamento']}'. Fale diretamente com ele, com "
@@ -1368,14 +1409,26 @@ async def tratar_comando_admin(texto: str, quem: str = "") -> str | None:
 
 
 # ─── Handler compartilhado entre os canais ────────────────────────────────────
-async def responder(texto: str, media_parts: list[dict], tipo: str) -> str:
+async def responder(texto: str, media_parts: list[dict], tipo: str,
+                    chat_id: int | None = None, nome: str = "") -> str:
     """
     Núcleo do atendimento, usado por Telegram, chat web e WhatsApp:
     memória → inferência multimodal → persistência → alertas clínicos.
+
+    chat_id e nome identificam quem está falando. Sem eles o agente
+    presumia estar diante do paciente, e tratava um filho como Sr. Edilson.
     """
+    contato = (identificar_contato_telegram(chat_id, nome)
+               if chat_id is not None else None)
+    if contato:
+        logger.info("Mensagem de %s (%s) [%s]", contato["nome"],
+                    contato["papel"], tipo)
+
     memoria = await zep_get_context()
-    resposta = await ask_dr_joao(texto, memoria, media_parts or None)
-    await zep_save(texto, resposta, {"tipo": tipo})
+    resposta = await ask_dr_joao(texto, memoria, media_parts or None,
+                                 contato=contato)
+    await zep_save(texto, resposta,
+                   {"tipo": tipo, "quem": (contato or {}).get("nome", "?")})
     await check_clinical_alerts(resposta, "canal")
 
     # Exame recebido: grava os valores em formato estruturado, para que a
@@ -1384,7 +1437,8 @@ async def responder(texto: str, media_parts: list[dict], tipo: str) -> str:
     if tipo in ("image", "document") and media_parts:
         await registrar_marcadores(media_parts)
     else:
-        await registrar_fatos_da_conversa(texto, resposta)
+        await registrar_fatos_da_conversa(texto, resposta,
+                                          (contato or {}).get("nome", ""))
     return resposta
 
 

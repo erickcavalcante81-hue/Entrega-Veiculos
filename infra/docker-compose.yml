@@ -207,6 +207,8 @@ services:
       - TELEGRAM_ALLOWED_IDS=${TELEGRAM_ALLOWED_IDS:-}
       # Quem pode deixar orientações permanentes de comportamento
       - TELEGRAM_ADMIN_IDS=${TELEGRAM_ADMIN_IDS:-}
+      # Quem é cada chat_id: "id:Nome:papel:tratamento, ..."
+      - TELEGRAM_CONTATOS=${TELEGRAM_CONTATOS:-}
       - VPS_IP=${VPS_IP}
       - EDILSON_PHONE=${EDILSON_PHONE}
       - N8N_FAMILY_GROUP_WA_ID=${N8N_FAMILY_GROUP_WA_ID}
