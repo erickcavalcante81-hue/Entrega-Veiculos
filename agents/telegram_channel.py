@@ -47,6 +47,7 @@ class TelegramChannel:
         handler: Callable[[str, list[dict], str], Awaitable[str]],
         build_media_part: Callable[[str, bytes, str], dict],
         blocos_de_documento: Optional[Callable[[bytes, str], list[dict]]] = None,
+        limpar_texto: Optional[Callable[[str], str]] = None,
         to_wav: Optional[Callable[[bytes], Awaitable[Optional[bytes]]]] = None,
         to_ogg: Optional[Callable[[bytes], Awaitable[Optional[bytes]]]] = None,
         tts: Optional[Callable[[str], Awaitable[Optional[bytes]]]] = None,
@@ -59,6 +60,7 @@ class TelegramChannel:
         # Sem conversor de documento, trata tudo como imagem (PDF falharia)
         self.blocos_de_documento = blocos_de_documento or (
             lambda raw, mime: [build_media_part("image", raw, mime)])
+        self.limpar_texto = limpar_texto
         self.to_wav = to_wav
         self.to_ogg = to_ogg
         self.tts = tts
@@ -80,9 +82,12 @@ class TelegramChannel:
             return r.json().get("result", {})
 
     async def enviar_texto(self, chat_id: int, texto: str) -> None:
+        # Sem parse_mode, o Telegram mostra ** e _ literalmente; com ele, um
+        # asterisco solto faz a API recusar a mensagem. A marcação é removida.
+        limpo = self.limpar_texto(texto) if self.limpar_texto else texto
         # O Telegram corta mensagens acima de 4096 caracteres
-        for i in range(0, len(texto), 4000):
-            await self._api("sendMessage", chat_id=chat_id, text=texto[i:i + 4000])
+        for i in range(0, len(limpo), 4000):
+            await self._api("sendMessage", chat_id=chat_id, text=limpo[i:i + 4000])
 
     async def enviar_voz(self, chat_id: int, audio: bytes) -> bool:
         """Envia como nota de voz. Exige OGG/Opus — converte se necessário."""

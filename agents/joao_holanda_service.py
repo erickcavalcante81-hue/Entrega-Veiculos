@@ -241,6 +241,14 @@ Se perceber tristeza/resistência, mencione: Final Champions (PSG × Arsenal, 31
 novelas Globo (Três Graças, Quem Ama Cuida), Netflix (Dele & Dela), ou times amazonenses \
 (Fast Club, Nacional-AM).
 
+FORMATO DA RESPOSTA:
+Você conversa, não escreve documento. Nunca use asterisco, sublinhado,
+crase, cerquilha nem qualquer marcação — o WhatsApp e o Telegram mostram
+esses símbolos literalmente, e a resposta em áudio os leria em voz alta.
+Para dar ênfase, use as palavras: "olha que bom", "isso é importante".
+Nada de listas com marcadores nem títulos: fale em parágrafos curtos,
+como quem conversa com um senhor de 76 anos.
+
 LIMITAÇÕES TÉCNICAS — NÃO AS NARRE:
 Nunca explique o funcionamento interno do sistema nem se descreva como "programa
 de computador", "robô" ou "inteligência artificial" para justificar algo que não
@@ -419,6 +427,23 @@ _RE_BULLET = re.compile(r"^\s*[-•▪●]\s*", re.MULTILINE)
 _RE_ESPACOS = re.compile(r"\n{3,}")
 
 
+def limpar_para_texto(texto: str) -> str:
+    """
+    Remove marcação Markdown do texto enviado ao paciente.
+
+    O Telegram e o WhatsApp não interpretam ** sem parse_mode, e ativar
+    parse_mode é frágil: um asterisco solto na resposta faz a API recusar a
+    mensagem inteira. Como o Dr. João conversa, e não formata documento,
+    o certo é a marcação não existir.
+    """
+    t = re.sub(r"\*\*(.+?)\*\*", r"\1", texto, flags=re.DOTALL)   # negrito
+    t = re.sub(r"(?<!\w)\*(?!\s)(.+?)(?<!\s)\*(?!\w)", r"\1", t, flags=re.DOTALL)
+    t = re.sub(r"(?<!\w)_(?!\s)(.+?)(?<!\s)_(?!\w)", r"\1", t, flags=re.DOTALL)
+    t = re.sub(r"`{1,3}", "", t)
+    t = re.sub(r"^#{1,6}\s*", "", t, flags=re.MULTILINE)          # títulos
+    return t.strip()
+
+
 def preparar_para_voz(texto: str) -> str:
     """
     Limpa o texto antes de virar áudio. Asterisco, emoji e marcador de lista
@@ -519,7 +544,7 @@ async def send_text(to: str, text: str) -> None:
             f"{EVOLUTION_API_URL}/message/sendText/{WHATSAPP_INSTANCE}",
             headers={"apikey": EVOLUTION_API_KEY, "Content-Type": "application/json"},
             json={"number": to, "options": {"delay": 800, "presence": "composing"},
-                  "textMessage": {"text": text}},
+                  "textMessage": {"text": limpar_para_texto(text)}},
         )
 
 
@@ -1157,6 +1182,7 @@ async def lifespan(app: FastAPI):
             handler=responder,
             build_media_part=build_media_part,
             blocos_de_documento=blocos_de_documento,
+            limpar_texto=limpar_para_texto,
             to_wav=ogg_to_wav,
             to_ogg=to_ogg_opus,
             tts=text_to_speech,
