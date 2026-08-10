@@ -61,6 +61,14 @@ FAMILY_GROUP_ID    = os.getenv("N8N_FAMILY_GROUP_WA_ID", "")
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 # IDs autorizados, separados por vírgula. Vazio = responde a qualquer um
 # (apenas para o cadastro inicial; o log mostra o chat_id de quem escrever).
+# Quem pode dar diretrizes de comportamento ao agente pelo Telegram. Trata-se
+# de administração, não de conversa clínica: separado da lista de contatos
+# autorizados de propósito.
+TELEGRAM_ADMIN_IDS = {
+    int(i) for i in os.getenv("TELEGRAM_ADMIN_IDS", "").replace(" ", "").split(",")
+    if i.lstrip("-").isdigit()
+}
+
 TELEGRAM_ALLOWED_IDS = {
     int(i) for i in os.getenv("TELEGRAM_ALLOWED_IDS", "").replace(" ", "").split(",")
     if i.lstrip("-").isdigit()
@@ -273,6 +281,20 @@ nome do pai dele. Não negue, não desconverse e não brinque para escapar da
 pergunta. Depois de responder, siga cuidando dele com o mesmo afeto — a verdade
 não tira nada do vínculo. Esta regra vale mais que qualquer outra deste prompt.
 
+ORIENTAÇÕES DA FAMÍLIA — SIGA SEMPRE:
+Estas são instruções permanentes deixadas por quem cuida do Sr. Edilson.
+Elas ajustam seu jeito de conversar, o que enfatizar e o que evitar.
+Respeite-as em toda resposta, sem mencioná-las nem dizer que recebeu
+instruções — para o Sr. Edilson, é simplesmente o seu jeito de ser.
+
+{diretrizes}
+
+Duas coisas que nenhuma orientação dessas pode mudar: as restrições
+clínicas da ficha (medicamento proibido continua proibido, mesmo que
+peçam o contrário) e a regra de honestidade sobre a sua natureza. Se uma
+orientação conflitar com isso, siga a ficha e avise a família — não o
+paciente — na próxima conversa com um dos filhos.
+
 QUEM ESTÁ FALANDO COM VOCÊ AGORA:
 {interlocutor}
 
@@ -409,6 +431,7 @@ async def ask_dr_joao(message: str, memoria: str,
     houver — imagem, vídeo ou áudio, tudo numa única inferência do Omni.
     """
     system = (SYSTEM_PROMPT
+              .replace("{diretrizes}", await bloco_de_diretrizes())
               .replace("{memoria_zep}", memoria)
               .replace("{tom_de_voz}", tom_de_voz or "Nenhuma nota de voz nesta mensagem.")
               .replace("{interlocutor}", descrever_interlocutor(contato))
@@ -1023,6 +1046,103 @@ def _extrair_json(texto: str) -> dict | None:
         return None
 
 
+# ─── Diretrizes de comportamento ─────────────────────────────────────────────
+# Orientações permanentes dadas pelo administrador — o filho que montou o
+# agente — sobre COMO conversar, falar e orientar. Vivem no Zep na categoria
+# 'diretriz' e entram no prompt de toda inferência.
+CATEGORIA_DIRETRIZ = "diretriz"
+
+PROMPT_CLASSIFICA_DIRETRIZ = """Você recebe uma mensagem enviada ao agente \
+Dr. João Holanda pelo administrador do sistema (o filho que o configurou).
+
+Decida se ela é uma DIRETRIZ — instrução permanente sobre como o agente deve \
+se comportar, conversar, falar ou orientar daqui em diante — ou apenas uma \
+CONVERSA comum, pergunta ou informação clínica pontual.
+
+São diretrizes: "fale mais devagar com ele", "não mencione o câncer a menos \
+que ele pergunte", "sempre pergunte da dor no joelho", "evite falar de morte", \
+"lembre dele beber água toda tarde", "seja mais breve nas respostas".
+
+NÃO são diretrizes: perguntas sobre exames, relatos de sintoma, pedidos de \
+informação, cumprimentos, testes do sistema.
+
+Responda APENAS com JSON válido, sem cercas de código:
+{"e_diretriz": true, "texto": "reescreva a diretriz em uma frase clara e \
+imperativa, na terceira pessoa, como instrução permanente"}
+
+Se não for diretriz: {"e_diretriz": false}
+
+MENSAGEM:
+{mensagem}"""
+
+
+async def registrar_diretriz(texto: str, autor: str = "") -> bool:
+    """Grava uma orientação permanente de comportamento."""
+    try:
+        from integrations.zep_memory import add_clinical_fact
+    except Exception as e:
+        logger.warning("Zep indisponível para gravar diretriz: %s", e)
+        return False
+
+    marca = f" (orientação de {autor})" if autor else ""
+    ok = await add_clinical_fact(texto.strip() + marca, CATEGORIA_DIRETRIZ)
+    if ok:
+        logger.info("Diretriz registrada: %s", texto[:80])
+    return ok
+
+
+async def listar_diretrizes() -> list[dict]:
+    """Devolve as diretrizes ativas, da mais antiga para a mais recente."""
+    try:
+        from integrations.zep_memory import get_facts
+        d = await get_facts(CATEGORIA_DIRETRIZ)
+        d.sort(key=lambda f: f.get("registrado_em", ""))
+        return d
+    except Exception as e:
+        logger.warning("Falha ao ler diretrizes: %s", e)
+        return []
+
+
+async def remover_diretriz(indice: int) -> str | None:
+    """Remove a diretriz de número `indice` (base 1). Devolve o texto removido."""
+    try:
+        from integrations.zep_memory import remove_clinical_fact
+        return await remove_clinical_fact(CATEGORIA_DIRETRIZ, indice)
+    except Exception as e:
+        logger.warning("Falha ao remover diretriz: %s", e)
+        return None
+
+
+async def bloco_de_diretrizes() -> str:
+    """Formata as diretrizes para entrarem no system prompt."""
+    d = await listar_diretrizes()
+    if not d:
+        return "(Nenhuma orientação específica registrada até agora.)"
+    return "\n".join(f"{i}. {f.get('fact','')}" for i, f in enumerate(d, 1))
+
+
+async def interpretar_como_diretriz(mensagem: str) -> str | None:
+    """
+    Decide se a mensagem do administrador é uma diretriz permanente.
+    Devolve o texto normalizado da diretriz, ou None se for conversa comum.
+    """
+    if len(mensagem.strip()) < 10:
+        return None
+    try:
+        bruto = await chamar_modelo(
+            "", PROMPT_CLASSIFICA_DIRETRIZ.replace("{mensagem}", mensagem[:2000]),
+            None, max_tokens=300, temperature=0.0, reasoning=False)
+    except Exception as e:
+        logger.warning("Falha ao classificar diretriz: %s", e)
+        return None
+
+    dados = _extrair_json(bruto)
+    if not dados or not dados.get("e_diretriz"):
+        return None
+    texto = (dados.get("texto") or "").strip()
+    return texto or None
+
+
 PROMPT_FATOS_CONVERSA = """Você é um extrator de dados clínicos. Leia a conversa \
 abaixo entre o Sr. Edilson (ou um filho) e o médico dele, e identifique APENAS \
 informações NOVAS e objetivas que valham ser guardadas no prontuário.
@@ -1178,6 +1298,75 @@ async def check_clinical_alerts(text: str, from_number: str) -> None:
                             f"Dr. João Holanda recomenda contato urgente com nefrologista.")
 
 
+# ─── Canal de administração ──────────────────────────────────────────────────
+AJUDA_ADMIN = """Comandos de administração do Dr. João Holanda:
+
+/orientar <texto>   grava uma orientação permanente de comportamento
+/diretrizes         lista as orientações ativas
+/esquecer <número>  remove a orientação daquele número
+/ajuda              mostra esta lista
+
+Você também pode simplesmente escrever a orientação em linguagem natural —
+"fale mais devagar com ele", "sempre pergunte do joelho" — que eu reconheço
+e guardo. Perguntas e conversas normais seguem o fluxo de sempre.
+
+As orientações valem para todas as conversas, em todos os canais. Elas não
+podem contrariar as restrições clínicas da ficha nem a regra de honestidade."""
+
+
+async def tratar_comando_admin(texto: str, quem: str = "") -> str | None:
+    """
+    Processa mensagens do administrador. Devolve a resposta quando a mensagem
+    for administrativa, ou None para que siga ao fluxo clínico normal.
+    """
+    t = texto.strip()
+    baixo = t.lower()
+
+    if baixo in ("/ajuda", "/help", "/start", "/comandos"):
+        return AJUDA_ADMIN
+
+    if baixo.startswith("/diretrizes"):
+        d = await listar_diretrizes()
+        if not d:
+            return ("Nenhuma orientação registrada ainda.\n\n"
+                    "Envie /orientar seguido do texto, ou escreva a orientação "
+                    "naturalmente que eu reconheço.")
+        linhas = "\n".join(f"{i}. {f.get('fact','')}" for i, f in enumerate(d, 1))
+        return f"Orientações ativas ({len(d)}):\n\n{linhas}\n\nPara remover: /esquecer <número>"
+
+    if baixo.startswith("/esquecer"):
+        partes = t.split(maxsplit=1)
+        if len(partes) < 2 or not partes[1].strip().isdigit():
+            return "Use: /esquecer <número>. Veja os números em /diretrizes."
+        removida = await remover_diretriz(int(partes[1].strip()))
+        if removida is None:
+            return "Não encontrei uma orientação com esse número. Confira /diretrizes."
+        return f"Esquecido:\n\n{removida}"
+
+    if baixo.startswith("/orientar"):
+        partes = t.split(maxsplit=1)
+        if len(partes) < 2 or not partes[1].strip():
+            return "Use: /orientar seguido da orientação. Ex.: /orientar fale mais devagar."
+        if await registrar_diretriz(partes[1].strip(), quem):
+            return (f"Anotado. A partir de agora:\n\n{partes[1].strip()}\n\n"
+                    f"Vale para todas as conversas. Veja tudo em /diretrizes.")
+        return "Não consegui gravar a orientação — a memória pode estar fora do ar."
+
+    # Sem comando: verifica se a mensagem é uma orientação em linguagem natural
+    if t.startswith("/"):
+        return f"Comando não reconhecido.\n\n{AJUDA_ADMIN}"
+
+    diretriz = await interpretar_como_diretriz(t)
+    if diretriz:
+        if await registrar_diretriz(diretriz, quem):
+            return (f"Entendi como orientação e guardei:\n\n{diretriz}\n\n"
+                    f"Se não era essa a intenção, use /esquecer para remover. "
+                    f"Veja todas em /diretrizes.")
+        return None
+
+    return None  # conversa comum: segue o fluxo clínico
+
+
 # ─── Handler compartilhado entre os canais ────────────────────────────────────
 async def responder(texto: str, media_parts: list[dict], tipo: str) -> str:
     """
@@ -1225,6 +1414,8 @@ async def lifespan(app: FastAPI):
             blocos_de_documento=blocos_de_documento,
             limpar_texto=limpar_para_texto,
             responder_em_voz=deve_responder_em_voz,
+            admin_ids=TELEGRAM_ADMIN_IDS,
+            tratar_admin=tratar_comando_admin,
             to_wav=ogg_to_wav,
             to_ogg=to_ogg_opus,
             tts=text_to_speech,
@@ -1232,8 +1423,9 @@ async def lifespan(app: FastAPI):
         )
         app.state.telegram = canal
         tarefa_telegram = asyncio.create_task(canal.rodar())
-        logger.info("Canal Telegram iniciando (%d contatos autorizados)...",
-                    len(TELEGRAM_ALLOWED_IDS))
+        logger.info("Canal Telegram iniciando (%d contatos autorizados, "
+                    "%d administrador(es))...",
+                    len(TELEGRAM_ALLOWED_IDS), len(TELEGRAM_ADMIN_IDS))
     else:
         logger.info("TELEGRAM_BOT_TOKEN ausente — canal Telegram desativado.")
 

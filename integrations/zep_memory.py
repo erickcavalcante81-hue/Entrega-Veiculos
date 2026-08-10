@@ -216,6 +216,37 @@ async def add_clinical_fact(fact: str, category: str = "clinico") -> bool:
         return resp.status_code == 200
 
 
+async def remove_clinical_fact(category: str, indice: int) -> Optional[str]:
+    """
+    Remove o fato de número `indice` (base 1) dentro de uma categoria,
+    ordenado por data de registro. Devolve o texto removido, ou None.
+    """
+    meta = await _get_session_metadata()
+    fatos = meta.get("clinical_facts", [])
+    da_categoria = sorted((f for f in fatos if f.get("categoria") == category),
+                          key=lambda f: f.get("registrado_em", ""))
+
+    if not 1 <= indice <= len(da_categoria):
+        return None
+
+    alvo = da_categoria[indice - 1]
+    meta["clinical_facts"] = [f for f in fatos if f is not alvo]
+
+    async with httpx.AsyncClient(timeout=15) as client:
+        resp = await client.patch(
+            f"{API}/sessions/{ZEP_SESSION_ID}",
+            headers=_headers(),
+            json={"metadata": meta},
+        )
+        if resp.status_code != 200:
+            logger.warning("Zep remove_clinical_fact falhou: HTTP %s — %s",
+                           resp.status_code, resp.text[:200])
+            return None
+
+    logger.info("Fato removido [%s]: %s", category, alvo.get("fact", "")[:70])
+    return alvo.get("fact", "")
+
+
 async def get_facts(category: Optional[str] = None) -> list[dict]:
     """Recupera fatos conhecidos sobre o Sr. Edilson, opcionalmente filtrados."""
     meta = await _get_session_metadata()

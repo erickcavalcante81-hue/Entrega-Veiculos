@@ -40,6 +40,8 @@ add_env "AGENT_ACCESS_TOKEN"     "$(openssl rand -hex 16)"
 # Canal Telegram — token do @BotFather e IDs autorizados (separados por vírgula)
 add_env "TELEGRAM_BOT_TOKEN"     ""
 add_env "TELEGRAM_ALLOWED_IDS"   ""
+# Quem pode dar diretrizes de comportamento ao agente
+add_env "TELEGRAM_ADMIN_IDS"     ""
 add_env "VOZ_ALERTA_LIMIAR"      "3"
 add_env "EXTRA_ALLOWED_NUMBERS"  ""
 add_env "EDILSON_PHONE"          ""

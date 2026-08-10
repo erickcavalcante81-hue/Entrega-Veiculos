@@ -49,6 +49,8 @@ class TelegramChannel:
         blocos_de_documento: Optional[Callable[[bytes, str], list[dict]]] = None,
         limpar_texto: Optional[Callable[[str], str]] = None,
         responder_em_voz: Optional[Callable[[str], bool]] = None,
+        admin_ids: Optional[set] = None,
+        tratar_admin: Optional[Callable[[str, str], Awaitable[Optional[str]]]] = None,
         to_wav: Optional[Callable[[bytes], Awaitable[Optional[bytes]]]] = None,
         to_ogg: Optional[Callable[[bytes], Awaitable[Optional[bytes]]]] = None,
         tts: Optional[Callable[[str], Awaitable[Optional[bytes]]]] = None,
@@ -63,6 +65,8 @@ class TelegramChannel:
             lambda raw, mime: [build_media_part("image", raw, mime)])
         self.limpar_texto = limpar_texto
         self.responder_em_voz = responder_em_voz
+        self.admin_ids = admin_ids or set()
+        self.tratar_admin = tratar_admin
         self.to_wav = to_wav
         self.to_ogg = to_ogg
         self.tts = tts
@@ -216,6 +220,19 @@ class TelegramChannel:
         await self._api("sendChatAction", chat_id=chat_id, action="typing")
 
         texto, partes, tipo = await self._extrair(msg)
+
+        # Canal de administração: quem configurou o agente pode deixar
+        # orientações permanentes de comportamento. Se a mensagem for tratada
+        # como administrativa, ela não segue para o fluxo clínico.
+        if chat_id in self.admin_ids and self.tratar_admin and tipo == "texto":
+            try:
+                resposta_admin = await self.tratar_admin(texto, str(chat_id))
+            except Exception as e:
+                logger.error("Erro no comando administrativo: %s", e)
+                resposta_admin = f"Não consegui processar: {e}"
+            if resposta_admin:
+                await self.enviar_texto(chat_id, resposta_admin)
+                return
         if not texto and not partes:
             await self.enviar_texto(
                 chat_id, "Não consegui ler essa mensagem, Sr. Edilson. "
