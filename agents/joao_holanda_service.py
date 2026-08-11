@@ -242,6 +242,9 @@ com naturalidade, sem soar repetitivo.
 
 TOM DE VOZ: empático, acolhedor, linguagem simples, parágrafos curtos (máx 3 por resposta).
 Valide os sentimentos antes de dar orientação clínica. Nunca diagnostique doenças novas.
+Escreva só o texto que você diria, em português corrido. Nunca envolva a resposta
+em tags como <speak>, <voice> ou qualquer marcação SSML/XML — isso não é lido
+como fala, quebra o áudio e aparece feio na tela de quem recebe por escrito.
 
 ORIGEM E FALA — CEARENSE DO CRATO (CARIRI):
 Você nasceu e viveu no Crato, no Cariri cearense, entre as décadas de 1930 e 1950.
@@ -586,6 +589,16 @@ _RE_EMOJI = re.compile(
     "[\U0001F300-\U0001FAFF\U00002600-\U000027BF\U0001F1E6-\U0001F1FF]+")
 _RE_BULLET = re.compile(r"^\s*[-•▪●]\s*", re.MULTILINE)
 _RE_ESPACOS = re.compile(r"\n{3,}")
+# O modelo às vezes "acha" que deve envolver a resposta em SSML (<speak>...
+# </speak>), hábito puxado de exemplos de TTS no treinamento. Isso nunca foi
+# pedido no prompt e nenhum provedor daqui (ElevenLabs) espera essa marcação:
+# ela vazava tanto no texto (tag literal na tela) quanto no áudio (o
+# ElevenLabs não sabe ler a tag como fala, e o resultado saía mudo ou quase).
+_RE_TAG_XML = re.compile(r"</?[a-zA-Z][\w:-]*(?:\s+[^<>]*)?/?>")
+
+
+def _remover_tags_ssml(texto: str) -> str:
+    return _RE_TAG_XML.sub("", texto)
 
 
 def limpar_para_texto(texto: str) -> str:
@@ -597,7 +610,8 @@ def limpar_para_texto(texto: str) -> str:
     mensagem inteira. Como o Dr. João conversa, e não formata documento,
     o certo é a marcação não existir.
     """
-    t = re.sub(r"\*\*(.+?)\*\*", r"\1", texto, flags=re.DOTALL)   # negrito
+    t = _remover_tags_ssml(texto)
+    t = re.sub(r"\*\*(.+?)\*\*", r"\1", t, flags=re.DOTALL)   # negrito
     t = re.sub(r"(?<!\w)\*(?!\s)(.+?)(?<!\s)\*(?!\w)", r"\1", t, flags=re.DOTALL)
     t = re.sub(r"(?<!\w)_(?!\s)(.+?)(?<!\s)_(?!\w)", r"\1", t, flags=re.DOTALL)
     t = re.sub(r"`{1,3}", "", t)
@@ -607,11 +621,12 @@ def limpar_para_texto(texto: str) -> str:
 
 def preparar_para_voz(texto: str) -> str:
     """
-    Limpa o texto antes de virar áudio. Asterisco, emoji e marcador de lista
-    são lidos literalmente ou viram ruído — nada disso deve chegar ao ouvido
-    do Sr. Edilson.
+    Limpa o texto antes de virar áudio. Asterisco, emoji, marcador de lista e
+    tag tipo SSML são lidos literalmente ou viram ruído — nada disso deve
+    chegar ao ouvido do Sr. Edilson.
     """
-    t = _RE_EMOJI.sub("", texto)
+    t = _remover_tags_ssml(texto)
+    t = _RE_EMOJI.sub("", t)
     t = _RE_MARKDOWN.sub("", t)
     t = _RE_BULLET.sub("", t)
     t = _RE_ESPACOS.sub("\n\n", t).strip()
@@ -647,6 +662,9 @@ async def text_to_speech(text: str, voice_id: str | None = None,
 
     falado = preparar_para_voz(text)
     if not falado:
+        logger.warning("Nada para falar após limpar o texto (%d caracteres "
+                       "originais) — resposta deve ter vindo só de marcação "
+                       "ou tag, sem texto de verdade.", len(text))
         return None
 
     try:
@@ -675,6 +693,12 @@ async def text_to_speech(text: str, voice_id: str | None = None,
             )
 
             if resp.status_code == 200:
+                if not resp.content:
+                    logger.warning("ElevenLabs devolveu HTTP 200 sem áudio "
+                                   "(%d caracteres enviados).", len(falado))
+                    return None
+                logger.info("ElevenLabs OK: %d caracteres → %d bytes MP3",
+                           len(falado), len(resp.content))
                 return resp.content
 
             # Falhas silenciosas aqui já custaram tempo antes: sem log claro,
@@ -858,10 +882,42 @@ def blocos_de_documento(raw: bytes, mime: str) -> list[dict]:
     return [build_media_part("image", raw, "image/jpeg")]
 
 
+# Abaixo disso, a nota de voz é sinal de conversão quebrada, não fala de
+# verdade — já aconteceu de o ffmpeg terminar com sucesso (returncode 0) e
+# ainda assim entregar um arquivo mudo ou cortado. Sem essa checagem, esse
+# áudio ia direto pro paciente sem ninguém perceber.
+DURACAO_MINIMA_VOZ_SEG = 0.3
+
+
+async def _duracao_audio(audio_data: bytes) -> float | None:
+    """Duração em segundos via ffprobe, ou None se não conseguir medir."""
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "ffprobe", "-hide_banner", "-loglevel", "error",
+            "-show_entries", "format=duration",
+            "-of", "default=noprint_wrappers=1:nokey=1", "-i", "pipe:0",
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        out, err = await proc.communicate(input=audio_data)
+        if proc.returncode != 0:
+            logger.warning("ffprobe falhou: %s", err.decode()[:200])
+            return None
+        return float(out.decode().strip())
+    except Exception as e:
+        logger.warning("Erro ao medir duração do áudio: %s", e)
+        return None
+
+
 async def to_ogg_opus(audio_data: bytes) -> bytes | None:
     """
     Converte o áudio do ElevenLabs (MP3) para OGG/Opus, formato exigido
     pelo Telegram para notas de voz. Em memória, sem tocar o disco.
+
+    Devolve None (o canal cai para texto) quando o resultado é curto demais
+    para ser fala de verdade — melhor o Sr. Edilson ler a resposta do que
+    receber uma nota de voz muda.
     """
     try:
         proc = await asyncio.create_subprocess_exec(
@@ -877,6 +933,21 @@ async def to_ogg_opus(audio_data: bytes) -> bytes | None:
         if proc.returncode != 0:
             logger.warning("ffmpeg (ogg/opus) falhou: %s", err.decode()[:200])
             return None
+        if not out:
+            logger.warning("ffmpeg (ogg/opus) devolveu áudio vazio "
+                           "(entrada: %d bytes)", len(audio_data))
+            return None
+
+        duracao = await _duracao_audio(out)
+        if duracao is not None and duracao < DURACAO_MINIMA_VOZ_SEG:
+            logger.warning("Nota de voz descartada: %.2fs de duração "
+                           "(entrada MP3: %d bytes, saída OGG: %d bytes) — "
+                           "caindo para texto.", duracao, len(audio_data), len(out))
+            return None
+
+        logger.info("Áudio convertido para OGG/Opus: %d → %d bytes (%.2fs)",
+                    len(audio_data), len(out),
+                    duracao if duracao is not None else -1)
         return out
     except Exception as e:
         logger.warning("Erro na conversão para ogg/opus: %s", e)
