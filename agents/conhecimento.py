@@ -21,7 +21,12 @@ from pathlib import Path
 
 logger = logging.getLogger("dr-joao-holanda.conhecimento")
 
+# Ficha do paciente: dado identificável, montado como volume e fora do git.
 DIR_CONHECIMENTO = Path(os.getenv("DIR_CONHECIMENTO", "/app/conhecimento"))
+# Referência clínica geral: conhecimento médico sem dado do paciente, versionado
+# junto com o código e embutido na imagem. Separar os dois permite evoluir a
+# base médica por commit, sem tocar no prontuário.
+DIR_REFERENCIAS = Path(os.getenv("DIR_REFERENCIAS", "/app/referencias"))
 LIMITE_CARACTERES = int(os.getenv("CONHECIMENTO_MAX_CHARS", "60000"))
 
 _cache: str | None = None
@@ -37,14 +42,18 @@ def carregar(forcar: bool = False) -> str:
     if _cache is not None and not forcar:
         return _cache
 
-    if not DIR_CONHECIMENTO.is_dir():
-        logger.warning("Diretório de conhecimento ausente: %s", DIR_CONHECIMENTO)
-        _cache = ""
-        return _cache
+    # Referência médica primeiro, ficha do paciente depois: o caso concreto
+    # deve ser a última coisa que o modelo lê antes das instruções.
+    arquivos: list[Path] = []
+    for diretorio in (DIR_REFERENCIAS, DIR_CONHECIMENTO):
+        if diretorio.is_dir():
+            arquivos.extend(sorted(diretorio.glob("*.md")))
+        else:
+            logger.warning("Diretório ausente: %s", diretorio)
 
-    arquivos = sorted(DIR_CONHECIMENTO.glob("*.md"))
     if not arquivos:
-        logger.warning("Nenhum documento .md em %s", DIR_CONHECIMENTO)
+        logger.warning("Nenhum documento .md em %s nem em %s",
+                       DIR_REFERENCIAS, DIR_CONHECIMENTO)
         _cache = ""
         return _cache
 
@@ -79,7 +88,9 @@ def disponivel() -> bool:
 def resumo() -> dict:
     """Estado da base, para o /health."""
     conteudo = carregar()
-    arquivos = sorted(p.name for p in DIR_CONHECIMENTO.glob("*.md")) \
-        if DIR_CONHECIMENTO.is_dir() else []
-    return {"carregada": bool(conteudo), "documentos": arquivos,
+    def nomes(d: Path) -> list[str]:
+        return sorted(p.name for p in d.glob("*.md")) if d.is_dir() else []
+    return {"carregada": bool(conteudo),
+            "referencias_clinicas": nomes(DIR_REFERENCIAS),
+            "ficha_paciente": nomes(DIR_CONHECIMENTO),
             "caracteres": len(conteudo)}
