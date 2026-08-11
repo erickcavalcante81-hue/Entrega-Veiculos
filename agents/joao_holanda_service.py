@@ -2930,6 +2930,31 @@ async def contatos_telegram(request: Request):
     })
 
 
+@app.post("/telegram/testar-alerta")
+async def testar_alerta_familia(request: Request):
+    """
+    Dispara uma mensagem de teste pelos mesmos canais de um alerta clínico
+    de verdade (grupo/contatos em TELEGRAM_FAMILIA_IDS, com WhatsApp como
+    reserva), sem envolver nenhum dado do paciente.
+
+    Existe para confirmar a entrega ANTES de precisar confiar no sistema
+    para um PSA ou eTFG alterado — não faz sentido descobrir que o grupo
+    está mal configurado só quando o alerta que importa não chegar.
+    critico=False: uma falha aqui é problema de configuração, não uma
+    emergência perdida, então não deve virar log CRITICAL.
+    """
+    require_token(request)
+    mensagem = ("🔧 Teste do sistema de alerta do Dr. João Holanda.\n"
+               "Se esta mensagem chegou, o canal está funcionando. Não é "
+               "um alerta clínico — pode ignorar.")
+    entregue = await notificar_familia(mensagem, critico=False)
+    return {
+        "entregue": entregue,
+        "telegram_familia_ids": sorted(TELEGRAM_FAMILIA_IDS),
+        "whatsapp_grupo_configurado": bool(FAMILY_GROUP_ID),
+    }
+
+
 @app.get("/modelos")
 async def modelos_disponiveis(request: Request):
     """
