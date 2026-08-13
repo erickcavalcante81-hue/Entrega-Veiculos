@@ -159,18 +159,30 @@ async def get_context(last_n: int = 10) -> str:
     #    família inteira — sem isto, "conversou com o Sr. Edilson hoje?"
     #    cai numa janela de mensagens recentes que pode estar cheia de
     #    mensagens de outra pessoa, e o agente responde errado por falta
-    #    de sinal, não por falta de memória de verdade.
+    #    de sinal, não por falta de memória de verdade. Guarda o dia
+    #    INTEIRO de trocas por pessoa (não só a última), para responder com
+    #    completude "o que conversamos hoje" — inclusive papo sem fato
+    #    clínico extraível, que os clinical_facts não guardam de propósito.
     interacoes = await get_ultimas_interacoes()
     if interacoes:
-        por_recencia = sorted(interacoes.values(),
-                              key=lambda d: d.get("ultima_em", ""), reverse=True)
-        linhas = "\n".join(
-            f"• {d.get('nome', '?')} ({d.get('papel', '?')}): última conversa em "
-            f"{(d.get('ultima_em') or '?')[:16].replace('T', ' ')} — "
-            f"\"{d.get('resumo', '')}\""
-            for d in por_recencia
-        )
-        parts.append(f"[ÚLTIMA CONVERSA POR PESSOA]\n{linhas}")
+        hoje = datetime.now(timezone.utc).date().isoformat()
+        linhas: list[str] = []
+        for d in sorted(interacoes.values(),
+                        key=lambda d: d.get("ultima_em", ""), reverse=True):
+            nome, papel = d.get("nome", "?"), d.get("papel", "?")
+            trocas = d.get("trocas_hoje", [])
+            if d.get("dia") == hoje and trocas:
+                itens = "\n".join(
+                    f"    - {(t.get('em') or '?')[11:16]}: \"{t.get('resumo', '')}\""
+                    for t in trocas
+                )
+                linhas.append(f"• {nome} ({papel}) — {len(trocas)} "
+                              f"troca(s) hoje:\n{itens}")
+            else:
+                quando = (d.get("ultima_em") or "?")[:16].replace("T", " ")
+                linhas.append(f"• {nome} ({papel}): sem conversa hoje — "
+                              f"última foi em {quando}")
+        parts.append("[CONVERSAS DE HOJE POR PESSOA]\n" + "\n".join(linhas))
 
     # 3. Resumo + mensagens recentes, com quem falou cada uma
     async with httpx.AsyncClient(timeout=15) as client:
@@ -210,21 +222,39 @@ async def get_context(last_n: int = 10) -> str:
     return "\n\n".join(parts) if parts else "Primeira interação com o Sr. Edilson."
 
 
-# ─── Última interação por pessoa ──────────────────────────────────────────────
-# Guardado à parte dos clinical_facts porque isto não é um fato clínico — é
-# um ponteiro de "quando" e "com quem", que o item 2 de get_context() usa
-# para responder com precisão perguntas como "conversou com o Sr. Edilson
-# hoje?" sem depender da janela de mensagens recentes (compartilhada por
-# toda a família, então facilmente sobrescrita por quem está falando agora).
+# ─── Conversas de hoje por pessoa ──────────────────────────────────────────────
+# Guardado à parte dos clinical_facts porque isto não é fato clínico — é um
+# log leve de "quando" e "com quem", que o item 2 de get_context() usa para
+# responder com completude perguntas como "o que conversamos hoje?" sem
+# depender da janela de mensagens recentes (compartilhada por toda a
+# família, então facilmente sobrescrita por quem está falando agora) nem
+# dos clinical_facts (que ignoram cumprimento/papo sem fato novo de propósito).
+#
+# trocas_hoje acumula TODAS as trocas do dia corrente — zera sozinho quando
+# o campo "dia" muda, então não vira um histórico permanente crescendo sem
+# fim. Limitada a 20 por pessoa/dia como teto de segurança (uma pessoa muito
+# ativa não deve inflar o prompt de toda inferência do dia).
+MAX_TROCAS_POR_DIA = 20
+
+
 async def registrar_interacao(chave: str, nome: str, papel: str, resumo: str) -> bool:
-    """Atualiza quando foi a última conversa com uma pessoa e um resumo curto."""
+    """Acrescenta uma troca de hoje ao histórico do dia desta pessoa."""
     meta = await _get_session_metadata()
     interacoes = meta.get("ultimas_interacoes", {})
+    agora = datetime.now(timezone.utc)
+    hoje = agora.date().isoformat()
+
+    registro = interacoes.get(chave, {})
+    trocas_hoje = registro.get("trocas_hoje", []) if registro.get("dia") == hoje else []
+    trocas_hoje.append({"em": agora.isoformat(), "resumo": (resumo or "").strip()[:140]})
+    trocas_hoje = trocas_hoje[-MAX_TROCAS_POR_DIA:]
+
     interacoes[chave] = {
         "nome": nome,
         "papel": papel,
-        "ultima_em": datetime.now(timezone.utc).isoformat(),
-        "resumo": (resumo or "").strip()[:140],
+        "ultima_em": agora.isoformat(),
+        "dia": hoje,
+        "trocas_hoje": trocas_hoje,
     }
     meta["ultimas_interacoes"] = interacoes
     ok, _status, _corpo = await _patch_session_metadata(meta)
