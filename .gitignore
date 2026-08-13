@@ -9,3 +9,7 @@ qrcode.png
 conhecimento/
 voz/
 backup_fatos_*.json
+
+# Bytecode Python — gerado localmente (testes, execução), nunca versionar
+__pycache__/
+*.pyc
