@@ -267,6 +267,18 @@ async def get_ultimas_interacoes() -> dict:
     return meta.get("ultimas_interacoes", {})
 
 
+async def get_trocas_do_dia(dia: str) -> dict:
+    """
+    Trocas de hoje por pessoa, só para o dia informado — descarta quem já
+    virou o dia (campo "dia" desatualizado) sem apagar nada, porque
+    registrar_interacao() só zera o "trocas_hoje" de alguém na PRÓXIMA vez
+    que essa pessoa escrever, não no relógio. Usado pela consolidação de
+    fim de dia para ler exatamente o que aconteceu hoje, antes de virar.
+    """
+    interacoes = await get_ultimas_interacoes()
+    return {chave: d for chave, d in interacoes.items() if d.get("dia") == dia}
+
+
 # ─── Fatos clínicos (armazenados na metadata da sessão) ───────────────────────
 # O Zep CE 0.27.x não tem um endpoint de "facts" (isso é do Zep Cloud).
 # Guardamos aqui na metadata da sessão via PATCH, que sobrevive independente

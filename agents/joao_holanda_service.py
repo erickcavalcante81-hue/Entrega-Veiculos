@@ -1852,6 +1852,110 @@ async def loop_relatorio_diario() -> None:
             await asyncio.sleep(300)
 
 
+# ─── Consolidação de memória de fim de dia ─────────────────────────────────────
+# As trocas do dia (trocas_hoje, por pessoa) e os fatos clínicos datados já
+# alimentam CADA conversa em tempo real — get_context() os injeta a cada
+# inferência. O que faltava era o fim de fila: quando o dia vira,
+# trocas_hoje daquela pessoa é substituído na próxima vez que ela escrever
+# (ver registrar_interacao), e o que aconteceu HOJE não deixava vestígio
+# permanente além dos fatos clínicos isolados — nada cruzava um dia com o
+# outro. Esta consolidação lê o dia inteiro (todas as pessoas) + os fatos
+# do dia, cruza com as últimas sínteses já gravadas para apontar TENDÊNCIA
+# (o que mudou, o que se repetiu), e grava o resultado como um fato datado
+# permanente — é isso que faz o Dr. João "aprender" a evolução do Sr.
+# Edilson dia a dia, em vez de reler o mesmo histórico bruto sempre.
+CATEGORIA_SINTESE_DIARIA = "sintese_diaria"
+QUANTIDADE_SINTESES_PARA_CRUZAR = 5
+
+
+async def montar_sintese_diaria(dia: str | None = None) -> str | None:
+    """
+    Consolida as conversas de um dia + fatos clínicos do dia numa síntese
+    curta, cruzando com as últimas sínteses já registradas. Devolve None
+    quando não houve nenhuma interação nesse dia — nada pra consolidar.
+    """
+    from integrations.zep_memory import get_trocas_do_dia, generate_daily_summary, get_facts
+    dia = dia or datetime.now(TZ_PARINTINS).date().isoformat()
+
+    trocas = await get_trocas_do_dia(dia)
+    resumo_fatos = await generate_daily_summary(dia)
+    if not trocas and not resumo_fatos["total_fatos"]:
+        return None
+
+    anteriores = sorted(await get_facts(CATEGORIA_SINTESE_DIARIA),
+                        key=lambda f: f.get("registrado_em", ""))
+    anteriores = anteriores[-QUANTIDADE_SINTESES_PARA_CRUZAR:]
+    historico = ("\n".join(f"- {f.get('fact', '')}" for f in anteriores)
+                or "(nenhuma síntese de dia anterior ainda)")
+
+    conversas = "\n".join(
+        f"{d.get('nome', '?')} ({d.get('papel', '?')}): "
+        + "; ".join(t.get("resumo", "") for t in d.get("trocas_hoje", []))
+        for d in trocas.values()
+    ) or "(nenhuma conversa registrada hoje)"
+
+    fatos_texto = "\n".join(
+        f"[{cat}] " + "; ".join(fs)
+        for cat, fs in resumo_fatos["fatos_por_categoria"].items()
+    ) or "(nenhum fato clínico novo hoje)"
+
+    prompt = (
+        "Você é a memória de longo prazo do Dr. João Holanda sobre o Sr. "
+        "Edilson. Escreva uma síntese objetiva do dia de hoje, em 3 a 5 "
+        "frases, cruzando com as sínteses dos dias anteriores para apontar "
+        "TENDÊNCIA — não repita o que já era sabido, destaque o que MUDOU "
+        "ou o que se REPETIU (ex: mesmo sintoma pela terceira vez, humor "
+        "melhorando, nova rotina se firmando).\n\n"
+        f"SÍNTESES DE DIAS ANTERIORES (mais recente por último):\n{historico}\n\n"
+        f"CONVERSAS DE HOJE (com todas as pessoas):\n{conversas}\n\n"
+        f"FATOS CLÍNICOS REGISTRADOS HOJE:\n{fatos_texto}\n\n"
+        "Responda só com a síntese, sem preâmbulo nem título, em texto corrido."
+    )
+    try:
+        return await chamar_modelo("", prompt, None, max_tokens=400,
+                                   temperature=0.3, reasoning=False)
+    except Exception as e:
+        logger.error("Falha ao montar a síntese diária: %s", e)
+        return None
+
+
+async def consolidar_memoria_diaria() -> bool:
+    """Gera e grava a síntese do dia como fato permanente e datado no Zep."""
+    from integrations.zep_memory import add_clinical_fact
+    sintese = await montar_sintese_diaria()
+    if not sintese:
+        logger.info("Síntese diária: nada para consolidar hoje.")
+        return False
+    ok = await add_clinical_fact(sintese, CATEGORIA_SINTESE_DIARIA)
+    logger.info("Síntese diária: %s", "gravada" if ok else "FALHOU ao gravar")
+    return ok
+
+
+async def loop_sintese_diaria() -> None:
+    """
+    Dorme até perto da meia-noite em Parintins (horário do paciente, não o
+    de Brasília do relatório da família) e consolida a memória do dia —
+    horário diferente do relatório de propósito, para captar o dia INTEIRO
+    antes de sintetizar, não só até as 20h.
+    """
+    while True:
+        agora = datetime.now(TZ_PARINTINS)
+        proximo = agora.replace(hour=23, minute=55, second=0, microsecond=0)
+        if proximo <= agora:
+            proximo += timedelta(days=1)
+        espera = (proximo - agora).total_seconds()
+        logger.info("Síntese diária: próxima consolidação %s (em %.0f min)",
+                    proximo.isoformat(), espera / 60)
+        try:
+            await asyncio.sleep(espera)
+            await consolidar_memoria_diaria()
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            logger.error("Laço da síntese diária falhou: %s", e)
+            await asyncio.sleep(300)
+
+
 # ─── FastAPI app ──────────────────────────────────────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -1898,6 +2002,11 @@ async def lifespan(app: FastAPI):
     logger.info("Relatório diário agendado para %dh (horário de Brasília).",
                 HORA_RELATORIO_FAMILIA)
 
+    # Consolidação de memória — perto da meia-noite em Parintins, horário
+    # diferente do relatório de propósito (ver loop_sintese_diaria)
+    tarefa_sintese = asyncio.create_task(loop_sintese_diaria())
+    logger.info("Síntese diária de memória agendada para ~23h55 (horário de Parintins).")
+
     yield
 
     if tarefa_telegram:
@@ -1907,11 +2016,12 @@ async def lifespan(app: FastAPI):
             await tarefa_telegram
         except (asyncio.CancelledError, Exception):
             pass
-    tarefa_relatorio.cancel()
-    try:
-        await tarefa_relatorio
-    except (asyncio.CancelledError, Exception):
-        pass
+    for tarefa in (tarefa_relatorio, tarefa_sintese):
+        tarefa.cancel()
+        try:
+            await tarefa
+        except (asyncio.CancelledError, Exception):
+            pass
     logger.info("Dr. João Holanda Agent encerrando.")
 
 
@@ -3256,6 +3366,25 @@ async def get_memory_context(request: Request):
     require_token(request)
     memoria = await zep_get_context()
     return JSONResponse({"contexto": memoria})
+
+
+@app.post("/memoria/testar-sintese")
+async def testar_sintese_diaria(request: Request):
+    """
+    Gera a síntese do dia agora (sem esperar ~23h55) e grava se houver algo
+    pra consolidar. Serve para conferir o texto e a gravação sem precisar
+    esperar a virada do dia de verdade.
+    """
+    require_token(request)
+    sintese = await montar_sintese_diaria()
+    if not sintese:
+        return {"gravado": False, "sintese": None,
+                "motivo": "Nenhuma conversa nem fato registrado hoje."}
+
+    from integrations.zep_memory import add_clinical_fact
+    ok = await add_clinical_fact(sintese, CATEGORIA_SINTESE_DIARIA)
+    return {"gravado": ok, "sintese": sintese,
+            "motivo": None if ok else "Falha ao gravar no Zep — veja docker logs."}
 
 
 if __name__ == "__main__":
