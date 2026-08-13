@@ -13,7 +13,7 @@ import os
 import re
 import secrets
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -1731,6 +1731,101 @@ async def responder(texto: str, media_parts: list[dict], tipo: str,
     return resposta
 
 
+# ─── Relatório diário da família ───────────────────────────────────────────────
+# CLAUDE.md §5: resumo às 20h (horário de Brasília) pros filhos, todo dia. O
+# agente já roda como processo de vida longa — mesmo motivo do polling do
+# Telegram — então um laço que dorme até o próximo horário faz o papel do
+# cron do n8n sem precisar manter um segundo sistema fora do git, com
+# workflow para importar e credencial para configurar à parte.
+HORA_RELATORIO_FAMILIA = int(os.getenv("HORA_RELATORIO_FAMILIA", "20"))
+# Brasil não observa horário de verão desde 2019 — offset fixo é seguro aqui
+# e evita depender do pacote tzdata (ausente na imagem slim) só por causa
+# disso. Se a lei mudar de novo, é um número pra trocar, não uma migração.
+TZ_BRASILIA   = timezone(timedelta(hours=-3))
+TZ_PARINTINS  = timezone(timedelta(hours=-4))   # define o que é "hoje" pro paciente
+
+
+async def montar_relatorio_diario() -> str | None:
+    """
+    Monta o texto do resumo diário em linguagem natural a partir SOMENTE dos
+    fatos estruturados registrados hoje no Zep — nunca da conversa crua, para
+    não vazar algo fora de contexto nem inventar o que não foi dito.
+
+    Devolve None quando não há nada registrado hoje: não faz sentido mandar
+    um resumo vazio pra família todo santo dia.
+    """
+    from integrations.zep_memory import generate_daily_summary
+    hoje = datetime.now(TZ_PARINTINS).date().isoformat()
+    resumo = await generate_daily_summary(hoje)
+
+    if not resumo["total_fatos"]:
+        return None
+
+    linhas = "\n".join(
+        f"[{categoria}] " + "; ".join(fatos)
+        for categoria, fatos in resumo["fatos_por_categoria"].items()
+    )
+
+    prompt = (
+        "Monte o resumo diário do Sr. Edilson para os filhos dele (Erick, "
+        "Camila e Junior), com base SOMENTE nos fatos abaixo, registrados "
+        "hoje — não invente nada que não esteja aqui:\n\n"
+        f"{linhas}\n\n"
+        "Tom: direto e objetivo. É comunicação com os filhos sobre o pai "
+        "deles, não conversa com o paciente — sem sotaque cearense, sem "
+        "humor, sem vocativo afetuoso. Cubra só o que houver dado de "
+        "verdade: humor do dia, sintoma relatado, medicamento confirmado, "
+        "alimentação, variação de exame. Não force um tópico sem dado — "
+        "se só houver uma coisa registrada hoje, o resumo é sobre essa "
+        "coisa só. Termine com uma recomendação objetiva para o dia "
+        "seguinte, apenas se fizer sentido. Parágrafos curtos."
+    )
+    try:
+        return await chamar_modelo("", prompt, None, max_tokens=700,
+                                   temperature=0.3, reasoning=False)
+    except Exception as e:
+        logger.error("Falha ao montar o relatório diário: %s", e)
+        return None
+
+
+async def enviar_relatorio_diario() -> bool:
+    """Monta e entrega o resumo diário pelos canais de família (grupo/filhos)."""
+    texto = await montar_relatorio_diario()
+    if not texto:
+        logger.info("Relatório diário: nada registrado hoje — nenhuma mensagem enviada.")
+        return False
+    entregue = await notificar_familia(
+        f"📋 Resumo do dia — Sr. Edilson\n\n{texto}", critico=False)
+    logger.info("Relatório diário: %s", "entregue" if entregue else "FALHOU na entrega")
+    return entregue
+
+
+async def loop_relatorio_diario() -> None:
+    """
+    Dorme até o próximo HORA_RELATORIO_FAMILIA (Brasília) e dispara o resumo,
+    todo dia, enquanto o processo estiver de pé.
+    """
+    while True:
+        agora = datetime.now(TZ_BRASILIA)
+        proximo = agora.replace(hour=HORA_RELATORIO_FAMILIA, minute=0,
+                                second=0, microsecond=0)
+        if proximo <= agora:
+            proximo += timedelta(days=1)
+        espera = (proximo - agora).total_seconds()
+        logger.info("Relatório diário: próximo envio %s (em %.0f min)",
+                    proximo.isoformat(), espera / 60)
+        try:
+            await asyncio.sleep(espera)
+            await enviar_relatorio_diario()
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            # Nunca deixa o laço morrer por uma falha de uma rodada — senão
+            # o relatório para de sair para sempre até o próximo restart.
+            logger.error("Laço do relatório diário falhou: %s", e)
+            await asyncio.sleep(300)
+
+
 # ─── FastAPI app ──────────────────────────────────────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -1772,6 +1867,11 @@ async def lifespan(app: FastAPI):
     else:
         logger.info("TELEGRAM_BOT_TOKEN ausente — canal Telegram desativado.")
 
+    # Relatório diário da família — laço próprio, não depende do n8n
+    tarefa_relatorio = asyncio.create_task(loop_relatorio_diario())
+    logger.info("Relatório diário agendado para %dh (horário de Brasília).",
+                HORA_RELATORIO_FAMILIA)
+
     yield
 
     if tarefa_telegram:
@@ -1781,6 +1881,11 @@ async def lifespan(app: FastAPI):
             await tarefa_telegram
         except (asyncio.CancelledError, Exception):
             pass
+    tarefa_relatorio.cancel()
+    try:
+        await tarefa_relatorio
+    except (asyncio.CancelledError, Exception):
+        pass
     logger.info("Dr. João Holanda Agent encerrando.")
 
 
@@ -2953,6 +3058,25 @@ async def testar_alerta_familia(request: Request):
         "telegram_familia_ids": sorted(TELEGRAM_FAMILIA_IDS),
         "whatsapp_grupo_configurado": bool(FAMILY_GROUP_ID),
     }
+
+
+@app.post("/telegram/testar-relatorio")
+async def testar_relatorio_diario(request: Request):
+    """
+    Dispara o resumo diário agora, fora do horário programado — para
+    conferir o conteúdo e a entrega sem precisar esperar até às
+    HORA_RELATORIO_FAMILIA horas de verdade.
+    """
+    require_token(request)
+    texto = await montar_relatorio_diario()
+    if not texto:
+        return {"entregue": False, "texto": None,
+                "motivo": "Nenhum fato registrado hoje — nada para resumir."}
+
+    entregue = await notificar_familia(
+        f"📋 Resumo do dia — Sr. Edilson\n\n{texto}", critico=False)
+    return {"entregue": entregue, "texto": texto,
+            "motivo": None if entregue else "Falha na entrega — veja docker logs."}
 
 
 @app.get("/modelos")

@@ -288,26 +288,32 @@ async def search_memory(query: str, limit: int = 5) -> list[dict]:
 
 
 # ─── Gerar resumo diário ──────────────────────────────────────────────────────
-async def generate_daily_summary() -> dict:
+async def generate_daily_summary(dia: Optional[str] = None) -> dict:
     """
-    Gera o resumo diário do Sr. Edilson para envio à família às 20h.
-    Consolida interações, fatos clínicos e variações de marcadores do dia.
+    Reúne os fatos clínicos registrados NUM DIA ESPECÍFICO (padrão: hoje,
+    UTC) para montar o resumo diário enviado à família às 20h.
+
+    Filtra por data de propósito: sem isso, o resumo repetiria o histórico
+    inteiro todos os dias — o objetivo aqui é "o que aconteceu hoje", não
+    "tudo que já se sabe sobre o Sr. Edilson" (isso já é o papel de
+    get_context()/get_facts() sem filtro, usado no prompt de cada conversa).
     """
-    context = await get_context(last_n=50)
-    exames  = await get_facts("exame")
-    humor   = await get_facts("humor")
-    aliment = await get_facts("alimentacao")
-    medic   = await get_facts("medicamento")
+    dia = dia or datetime.now(timezone.utc).date().isoformat()
+    todos = await get_facts()
+    # registrado_em é ISO 8601 UTC (ex: "2026-08-12T23:10:00+00:00") — os 10
+    # primeiros caracteres são a data.
+    de_hoje = [f for f in todos if (f.get("registrado_em") or "")[:10] == dia]
+
+    por_categoria: dict[str, list[str]] = {}
+    for f in de_hoje:
+        por_categoria.setdefault(f.get("categoria", "outro"), []).append(f.get("fact", ""))
 
     return {
-        "data": datetime.now(timezone.utc).date().isoformat(),
+        "data": dia,
         "paciente": "Sr. Edilson",
         "cidade": "Parintins, AM",
-        "contexto_memoria": context,
-        "exames_recentes": exames,
-        "humor_do_dia": humor,
-        "alimentacao": aliment,
-        "medicamentos": medic,
+        "fatos_por_categoria": por_categoria,
+        "total_fatos": len(de_hoje),
         "gerado_por": "Dr. João Holanda",
     }
 
