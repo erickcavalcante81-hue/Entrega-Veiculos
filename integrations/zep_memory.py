@@ -136,18 +136,43 @@ async def save_interaction(
 async def get_context(last_n: int = 10) -> str:
     """
     Retorna o contexto resumido da memória do Sr. Edilson para enriquecer
-    o prompt do Dr. João Holanda: fatos clínicos (metadata da sessão) +
-    resumo do Zep (quando já gerado) + mensagens recentes.
+    o prompt do Dr. João Holanda: fatos clínicos datados (metadata da
+    sessão) + última conversa com cada pessoa + resumo do Zep (quando já
+    gerado) + mensagens recentes, com quem falou cada uma.
     """
     parts: list[str] = []
 
-    # 1. Fatos clínicos estruturados, guardados na metadata da sessão
+    # 1. Fatos clínicos estruturados, guardados na metadata da sessão — COM
+    #    DATA. Sem data, o agente não distingue um fato de hoje de um fato
+    #    de duas semanas atrás, e acaba repetindo como se fosse novidade.
     facts = await get_facts()
     if facts:
-        facts_text = "\n".join(f"• [{f.get('categoria','?')}] {f.get('fact','')}" for f in facts)
+        facts_ordenados = sorted(facts, key=lambda f: f.get("registrado_em", ""))
+        facts_text = "\n".join(
+            f"• [{f.get('categoria', '?')}] {f.get('fact', '')} "
+            f"(registrado em {(f.get('registrado_em') or '?')[:10]})"
+            for f in facts_ordenados
+        )
         parts.append(f"[FATOS CONHECIDOS SOBRE O SR. EDILSON]\n{facts_text}")
 
-    # 2. Resumo + mensagens recentes
+    # 2. Última conversa com CADA PESSOA. A sessão do Zep é única para a
+    #    família inteira — sem isto, "conversou com o Sr. Edilson hoje?"
+    #    cai numa janela de mensagens recentes que pode estar cheia de
+    #    mensagens de outra pessoa, e o agente responde errado por falta
+    #    de sinal, não por falta de memória de verdade.
+    interacoes = await get_ultimas_interacoes()
+    if interacoes:
+        por_recencia = sorted(interacoes.values(),
+                              key=lambda d: d.get("ultima_em", ""), reverse=True)
+        linhas = "\n".join(
+            f"• {d.get('nome', '?')} ({d.get('papel', '?')}): última conversa em "
+            f"{(d.get('ultima_em') or '?')[:16].replace('T', ' ')} — "
+            f"\"{d.get('resumo', '')}\""
+            for d in por_recencia
+        )
+        parts.append(f"[ÚLTIMA CONVERSA POR PESSOA]\n{linhas}")
+
+    # 3. Resumo + mensagens recentes, com quem falou cada uma
     async with httpx.AsyncClient(timeout=15) as client:
         resp = await client.get(
             f"{API}/sessions/{ZEP_SESSION_ID}/memory",
@@ -170,12 +195,46 @@ async def get_context(last_n: int = 10) -> str:
 
             if messages:
                 recent = messages[-4:]  # últimas ~2 trocas
+                # A sessão é compartilhada por toda a família — sem o nome,
+                # "user"/"assistant" não diz QUEM disse o quê.
+                def _quem(m: dict) -> str:
+                    meta = m.get("metadata") or {}
+                    return (meta.get("quem") or meta.get("nome_agente")
+                           or m.get("role", "?"))
                 msgs_text = "\n".join(
-                    f"{m.get('role','?')}: {m.get('content','')}" for m in recent
+                    f"{_quem(m)}: {m.get('content', '')}" for m in recent
                 )
-                parts.append(f"[MENSAGENS RECENTES]\n{msgs_text}")
+                parts.append(f"[MENSAGENS RECENTES — podem ser de qualquer "
+                             f"pessoa da família]\n{msgs_text}")
 
     return "\n\n".join(parts) if parts else "Primeira interação com o Sr. Edilson."
+
+
+# ─── Última interação por pessoa ──────────────────────────────────────────────
+# Guardado à parte dos clinical_facts porque isto não é um fato clínico — é
+# um ponteiro de "quando" e "com quem", que o item 2 de get_context() usa
+# para responder com precisão perguntas como "conversou com o Sr. Edilson
+# hoje?" sem depender da janela de mensagens recentes (compartilhada por
+# toda a família, então facilmente sobrescrita por quem está falando agora).
+async def registrar_interacao(chave: str, nome: str, papel: str, resumo: str) -> bool:
+    """Atualiza quando foi a última conversa com uma pessoa e um resumo curto."""
+    meta = await _get_session_metadata()
+    interacoes = meta.get("ultimas_interacoes", {})
+    interacoes[chave] = {
+        "nome": nome,
+        "papel": papel,
+        "ultima_em": datetime.now(timezone.utc).isoformat(),
+        "resumo": (resumo or "").strip()[:140],
+    }
+    meta["ultimas_interacoes"] = interacoes
+    ok, _status, _corpo = await _patch_session_metadata(meta)
+    return ok
+
+
+async def get_ultimas_interacoes() -> dict:
+    """Última conversa registrada com cada pessoa, chaveada por chat_id/número."""
+    meta = await _get_session_metadata()
+    return meta.get("ultimas_interacoes", {})
 
 
 # ─── Fatos clínicos (armazenados na metadata da sessão) ───────────────────────

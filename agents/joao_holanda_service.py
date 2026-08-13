@@ -407,6 +407,25 @@ async def zep_save(patient_msg: str, agent_response: str, metadata: dict = None)
         logger.warning("Zep save error: %s", e)
 
 
+async def zep_registrar_interacao(chave: str, nome: str, papel: str, texto: str) -> None:
+    """
+    Marca QUANDO foi a última conversa com esta pessoa. A sessão do Zep é
+    única para a família inteira — sem isto, perguntar "conversou com o
+    Sr. Edilson hoje?" cai numa janela de mensagens recentes compartilhada,
+    que qualquer outra pessoa escrevendo agora pode empurrar pra fora.
+    """
+    if not ZEP_API_KEY or not chave:
+        return
+    try:
+        from integrations.zep_memory import registrar_interacao
+        ok = await registrar_interacao(chave, nome or "Desconhecido",
+                                       papel or "desconhecido", texto)
+        if not ok:
+            logger.warning("Zep registrar_interacao retornou falha.")
+    except Exception as e:
+        logger.warning("Zep registrar_interacao error: %s", e)
+
+
 # ─── Motor de IA ──────────────────────────────────────────────────────────────
 # A escolha do provedor — Google Gemini ou Nvidia NIM — vive em llm_backend.py.
 # Aqui o código apenas monta o prompt e entrega a mídia em formato neutro,
@@ -1136,6 +1155,9 @@ async def process_message(from_number: str, message_text: str,
     if prosodia:
         meta["prosodia"] = prosodia
     await zep_save(message_text, resposta, meta)
+    await zep_registrar_interacao(
+        from_number, (contato or {}).get("nome", from_number),
+        (contato or {}).get("papel", "desconhecido"), message_text)
 
     # 6. Registra a evolução do humor como fato clínico datado — é o que
     #    alimenta o item "humor geral do dia" do relatório familiar das 20h.
@@ -1718,6 +1740,10 @@ async def responder(texto: str, media_parts: list[dict], tipo: str,
                                  memoria_resultado=mem_resultado)
     await zep_save(texto, resposta,
                    {"tipo": tipo, "quem": (contato or {}).get("nome", "?")})
+    if chat_id is not None:
+        await zep_registrar_interacao(
+            str(chat_id), (contato or {}).get("nome", nome),
+            (contato or {}).get("papel", "desconhecido"), texto)
     await check_clinical_alerts(resposta, "canal")
 
     # Exame recebido: grava os valores em formato estruturado, para que a
