@@ -357,6 +357,46 @@ async def remove_clinical_fact(category: str, indice: int) -> Optional[str]:
     return alvo.get("fact", "")
 
 
+async def dedupe_clinical_facts() -> dict:
+    """
+    Remove fatos com texto EXATAMENTE igual a outro já registrado (mesma
+    categoria), mantendo o mais antigo de cada grupo. Limpeza pontual para
+    o lixo acumulado pelo bug de extração sem deduplicação (corrigido, mas
+    o que já tinha sido gravado antes continuava lá, inflando o contexto
+    de toda inferência e realimentando a síntese diária com repetição).
+
+    Não mexe em fatos com texto DIFERENTE, mesmo que sobre o mesmo assunto
+    — uma queixa recorrente relatada com detalhe novo é dado de verdade,
+    não duplicata.
+    """
+    meta = await _get_session_metadata()
+    fatos = meta.get("clinical_facts", [])
+
+    vistos: set[tuple[str, str]] = set()
+    mantidos: list[dict] = []
+    removidos: list[dict] = []
+    for f in sorted(fatos, key=lambda f: f.get("registrado_em", "")):
+        chave = (f.get("categoria", ""), (f.get("fact", "") or "").strip())
+        if chave in vistos:
+            removidos.append(f)
+            continue
+        vistos.add(chave)
+        mantidos.append(f)
+
+    if not removidos:
+        return {"removidos": 0, "restantes": len(fatos)}
+
+    meta["clinical_facts"] = mantidos
+    ok, _status, _corpo = await _patch_session_metadata(meta)
+    if not ok:
+        return {"removidos": 0, "restantes": len(fatos), "erro": "falha ao gravar"}
+
+    logger.info("Deduplicação: %d fato(s) duplicado(s) removido(s), %d restantes.",
+               len(removidos), len(mantidos))
+    return {"removidos": len(removidos), "restantes": len(mantidos),
+            "exemplos_removidos": [f.get("fact", "")[:80] for f in removidos[:10]]}
+
+
 async def get_facts(category: Optional[str] = None) -> list[dict]:
     """Recupera fatos conhecidos sobre o Sr. Edilson, opcionalmente filtrados."""
     meta = await _get_session_metadata()

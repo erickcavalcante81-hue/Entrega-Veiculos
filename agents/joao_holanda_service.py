@@ -395,12 +395,19 @@ async def zep_get_context() -> str:
 
 
 async def zep_save(patient_msg: str, agent_response: str, metadata: dict = None) -> None:
-    """Salva interação no Zep para aprendizado longitudinal."""
+    """
+    Salva interação no Zep para aprendizado longitudinal.
+
+    Limpa tag tipo <speak> da resposta antes de gravar — sem isso, o Dr.
+    João lia a própria tag de volta como "mensagem recente" nas próximas
+    conversas, reforçando o hábito que a correção do áudio já eliminou na
+    saída, mas não no que ficava salvo pra sempre na memória.
+    """
     if not ZEP_API_KEY:
         return
     try:
         from integrations.zep_memory import save_interaction
-        ok = await save_interaction(patient_msg, agent_response, metadata)
+        ok = await save_interaction(patient_msg, _remover_tags_ssml(agent_response), metadata)
         if not ok:
             logger.warning("Zep save_interaction retornou falha.")
     except Exception as e:
@@ -3403,6 +3410,22 @@ async def get_memory_context(request: Request):
     require_token(request)
     memoria = await zep_get_context()
     return JSONResponse({"contexto": memoria})
+
+
+@app.post("/memoria/deduplicar")
+async def deduplicar_memoria(request: Request):
+    """
+    Remove fatos com texto EXATAMENTE repetido — limpeza pontual do que se
+    acumulou antes da deduplicação na extração existir. Só apaga texto
+    idêntico; uma queixa recorrente relatada com detalhe novo (texto
+    diferente) não é tocada.
+    """
+    require_token(request)
+    try:
+        from integrations.zep_memory import dedupe_clinical_facts
+        return await dedupe_clinical_facts()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/memoria/testar-sintese")
