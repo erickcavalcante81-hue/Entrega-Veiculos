@@ -22,7 +22,7 @@ Uso:
 
 import os
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import httpx
@@ -389,7 +389,8 @@ async def search_memory(query: str, limit: int = 5) -> list[dict]:
 
 
 # ─── Gerar resumo diário ──────────────────────────────────────────────────────
-async def generate_daily_summary(dia: Optional[str] = None) -> dict:
+async def generate_daily_summary(dia: Optional[str] = None,
+                                 offset_horas: int = 0) -> dict:
     """
     Reúne os fatos clínicos registrados NUM DIA ESPECÍFICO (padrão: hoje,
     UTC) para montar o resumo diário enviado à família às 20h.
@@ -398,12 +399,30 @@ async def generate_daily_summary(dia: Optional[str] = None) -> dict:
     inteiro todos os dias — o objetivo aqui é "o que aconteceu hoje", não
     "tudo que já se sabe sobre o Sr. Edilson" (isso já é o papel de
     get_context()/get_facts() sem filtro, usado no prompt de cada conversa).
+
+    offset_horas desloca o cálculo do "dia" de cada fato antes de comparar
+    (padrão 0 = dia em UTC). Os fatos são gravados com registrado_em em
+    UTC, mas "hoje" para a família é o dia em Parintins (UTC-4) — sem
+    aplicar o mesmo deslocamento aqui, um fato das ~20h-23h59 locais (já
+    virou o dia em UTC) ficava fora do "hoje" que o chamador pediu, e o
+    resumo saía raso, sobrando o modelo preencher com narrativa genérica.
+    Passe offset_horas=-4 junto com um `dia` já calculado em Parintins.
     """
-    dia = dia or datetime.now(timezone.utc).date().isoformat()
+    fuso = timedelta(hours=offset_horas)
+    dia = dia or (datetime.now(timezone.utc) + fuso).date().isoformat()
     todos = await get_facts()
-    # registrado_em é ISO 8601 UTC (ex: "2026-08-12T23:10:00+00:00") — os 10
-    # primeiros caracteres são a data.
-    de_hoje = [f for f in todos if (f.get("registrado_em") or "")[:10] == dia]
+
+    def _dia_do_fato(f: dict) -> Optional[str]:
+        bruto = f.get("registrado_em") or ""
+        try:
+            quando = datetime.fromisoformat(bruto)
+        except ValueError:
+            return None
+        if quando.tzinfo is None:
+            quando = quando.replace(tzinfo=timezone.utc)
+        return (quando + fuso).date().isoformat()
+
+    de_hoje = [f for f in todos if _dia_do_fato(f) == dia]
 
     por_categoria: dict[str, list[str]] = {}
     for f in de_hoje:

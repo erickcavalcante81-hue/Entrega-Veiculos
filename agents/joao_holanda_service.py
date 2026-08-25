@@ -1403,8 +1403,16 @@ GUARDE TAMBÉM (sobre as pessoas em volta e o contexto):
 - qualquer coisa que a pessoa peça explicitamente para memorizar, lembrar,
   guardar ou anotar — isso SEMPRE deve ser guardado, sem exceção
 
+JÁ SABIDO sobre preferências, perfil e família (não grave de novo, mesmo \
+que o assunto volte na conversa — só grave se for informação REALMENTE \
+diferente do que já está aqui, não uma reformulação do mesmo fato):
+{ja_sabido}
+
 NÃO guarde: cumprimentos, conversa fiada, o que o médico recomendou, \
-informação que já é conhecida, suposições suas.
+informação que já está na lista "JÁ SABIDO" acima, suposições suas. \
+Sintoma, medicamento, consulta e evento SÃO exceção a essa regra: se o \
+mesmo sintoma aparecer nas próximas conversas, grave de novo — recorrência \
+é dado clínico, não repetição a evitar.
 
 Escreva cada fato em terceira pessoa, com o NOME da pessoa, para que faça \
 sentido isolado meses depois. "Erick mora em Fortaleza", não "ele mora lá".
@@ -1420,6 +1428,11 @@ evento, familia, perfil, preferencia.
 CONVERSA:
 {quem}: {mensagem}
 Dr. João Holanda: {resposta}"""
+
+# Categorias "duráveis": não mudam de um dia pro outro, então reaparecer na
+# conversa não é fato novo. Diferente de sintoma/medicamento/consulta/evento,
+# que são dados datados por natureza — a recorrência ali É a informação.
+_CATEGORIAS_DURAVEIS = {"perfil", "preferencia", "familia", "rotina"}
 
 # Pedidos explícitos de memorização não podem depender do julgamento do
 # extrator: se a pessoa pediu para guardar, guarda-se.
@@ -1444,8 +1457,25 @@ async def registrar_fatos_da_conversa(mensagem: str, resposta: str = "",
     if len(mensagem.strip()) < 8 and not pedido_explicito:
         return []
 
+    # Sem isto, o extrator não tem como saber que "gosta de tênis, torce
+    # pro João Fonseca" já foi gravado semana passada — ele só vê a
+    # conversa atual, isolada. Resultado: o mesmo fato durável (preferência,
+    # perfil, família) era regravado toda vez que o assunto voltava à tona,
+    # inflando a memória e repetindo o mesmo conteúdo no relatório diário.
+    try:
+        from integrations.zep_memory import get_facts
+        conhecidos = await get_facts()
+    except Exception as e:
+        logger.warning("Falha ao ler fatos conhecidos para deduplicação: %s", e)
+        conhecidos = []
+    ja_sabido = [f.get("fact", "") for f in conhecidos
+                if f.get("categoria") in _CATEGORIAS_DURAVEIS]
+    bloco_ja_sabido = ("\n".join(f"- {t}" for t in ja_sabido[-40:])
+                       or "(nada registrado ainda nessas categorias)")
+
     prompt = (PROMPT_FATOS_CONVERSA
               .replace("{quem}", quem or "Pessoa não identificada")
+              .replace("{ja_sabido}", bloco_ja_sabido)
               .replace("{mensagem}", mensagem[:3000])
               .replace("{resposta}", resposta[:2000]))
     if pedido_explicito:
@@ -1768,7 +1798,8 @@ HORA_RELATORIO_FAMILIA = int(os.getenv("HORA_RELATORIO_FAMILIA", "20"))
 # e evita depender do pacote tzdata (ausente na imagem slim) só por causa
 # disso. Se a lei mudar de novo, é um número pra trocar, não uma migração.
 TZ_BRASILIA   = timezone(timedelta(hours=-3))
-TZ_PARINTINS  = timezone(timedelta(hours=-4))   # define o que é "hoje" pro paciente
+OFFSET_PARINTINS_HORAS = -4
+TZ_PARINTINS  = timezone(timedelta(hours=OFFSET_PARINTINS_HORAS))  # define o que é "hoje" pro paciente
 
 
 async def montar_relatorio_diario() -> str | None:
@@ -1782,7 +1813,7 @@ async def montar_relatorio_diario() -> str | None:
     """
     from integrations.zep_memory import generate_daily_summary
     hoje = datetime.now(TZ_PARINTINS).date().isoformat()
-    resumo = await generate_daily_summary(hoje)
+    resumo = await generate_daily_summary(hoje, offset_horas=OFFSET_PARINTINS_HORAS)
 
     if not resumo["total_fatos"]:
         return None
@@ -1804,7 +1835,13 @@ async def montar_relatorio_diario() -> str | None:
         "alimentação, variação de exame. Não force um tópico sem dado — "
         "se só houver uma coisa registrada hoje, o resumo é sobre essa "
         "coisa só. Termine com uma recomendação objetiva para o dia "
-        "seguinte, apenas se fizer sentido. Parágrafos curtos."
+        "seguinte, apenas se fizer sentido. Parágrafos curtos.\n\n"
+        "PROIBIDO: comparar com dias anteriores, dizer que algo foi "
+        "\"retomado\", \"reiterado\" ou \"contrasta com o padrão anterior\", "
+        "ou qualquer afirmação sobre tendência/histórico — você só tem os "
+        "fatos de HOJE, listados acima, nada de outros dias. Se a lista "
+        "acima parecer repetitiva ou parecida com a de ontem, relate os "
+        "fatos de hoje do mesmo jeito objetivo, sem comentar a semelhança."
     )
     try:
         return await chamar_modelo("", prompt, None, max_tokens=700,
@@ -1878,7 +1915,7 @@ async def montar_sintese_diaria(dia: str | None = None) -> str | None:
     dia = dia or datetime.now(TZ_PARINTINS).date().isoformat()
 
     trocas = await get_trocas_do_dia(dia)
-    resumo_fatos = await generate_daily_summary(dia)
+    resumo_fatos = await generate_daily_summary(dia, offset_horas=OFFSET_PARINTINS_HORAS)
     if not trocas and not resumo_fatos["total_fatos"]:
         return None
 
