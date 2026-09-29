@@ -15,6 +15,7 @@ A mídia trafega internamente num formato neutro — {kind, mime, b64} — e
 cada backend a serializa no formato que espera.
 """
 
+import asyncio
 import base64
 import logging
 import os
@@ -187,12 +188,18 @@ async def _chamar_nim(system: str, texto: str, partes: list[dict],
         payload["reasoning_budget"] = NIM_REASONING_BUDGET
 
     async with httpx.AsyncClient(timeout=180) as client:
-        resp = await client.post(
-            f"{NIM_BASE_URL}/chat/completions",
-            headers={"Authorization": f"Bearer {NIM_API_KEY}",
-                     "Content-Type": "application/json"},
-            json=payload,
-        )
+        # O endpoint gratuito do NIM devolve 503/429 quando está sobrecarregado;
+        # costuma liberar em segundos, então vale insistir um pouco.
+        for tentativa in range(3):
+            resp = await client.post(
+                f"{NIM_BASE_URL}/chat/completions",
+                headers={"Authorization": f"Bearer {NIM_API_KEY}",
+                         "Content-Type": "application/json"},
+                json=payload,
+            )
+            if resp.status_code not in (429, 503):
+                break
+            await asyncio.sleep(3 * (tentativa + 1))
         if resp.status_code != 200:
             raise RuntimeError(f"NIM HTTP {resp.status_code}: {resp.text[:300]}")
         return resp.json()["choices"][0]["message"]["content"].strip()
@@ -210,7 +217,16 @@ async def chamar_modelo(system: str, texto: str,
     partes = partes or []
     max_tokens = max_tokens or MAX_TOKENS_PADRAO
     if PROVIDER == "gemini":
-        return await _chamar_gemini(system, texto, partes, max_tokens, temperature)
+        try:
+            return await _chamar_gemini(system, texto, partes, max_tokens, temperature)
+        except Exception as e:
+            # Cota estourada (429) ou instabilidade do Gemini: sem reserva, o
+            # paciente recebe a mesma desculpa de "dificuldade técnica" em loop.
+            if not NIM_API_KEY:
+                raise
+            logger.warning("Gemini falhou (%s) — usando o NIM como reserva.", e)
+            return await _chamar_nim(system, texto, partes, max_tokens,
+                                     temperature, reasoning)
     return await _chamar_nim(system, texto, partes, max_tokens, temperature, reasoning)
 
 
